@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Stock Portfolio Advisor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f1f5f9; }
+    .tab-active { border-bottom: 3px solid #2563eb; color: #2563eb; font-weight: 600; }
+    .tab-btn { transition: all 0.15s; padding: 12px 0; flex: 1; text-align: center; font-size: 13px; color: #6b7280; }
+    .card { background: white; border-radius: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    .gain { color: #16a34a; }
+    .loss { color: #dc2626; }
+    .btn-primary { background: #2563eb; color: white; border-radius: 12px; padding: 13px; font-weight: 600; width: 100%; font-size: 15px; }
+    .btn-danger { background: #fee2e2; color: #dc2626; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; }
+    input, select, textarea { border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 12px; width: 100%; font-size: 15px; outline: none; background: #f8fafc; }
+    input:focus, select:focus, textarea:focus { border-color: #2563eb; background: white; }
+    .skeleton { background: linear-gradient(90deg,#e2e8f0 25%,#f1f5f9 50%,#e2e8f0 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 6px; }
+    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+    .badge { display: inline-block; border-radius: 20px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
+    .badge-gain { background: #dcfce7; color: #16a34a; }
+    .badge-loss { background: #fee2e2; color: #dc2626; }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+    #toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 10px 20px; border-radius: 20px; font-size: 14px; z-index: 999; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+    #toast.show { opacity: 1; }
+    .loading-spin { display: inline-block; width: 16px; height: 16px; border: 2px solid #bfdbfe; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="min-h-screen pb-24">
+
+  <!-- Header -->
+  <div class="bg-white sticky top-0 z-10 shadow-sm">
+    <div class="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
+      <div>
+        <h1 class="text-lg font-bold text-gray-900">Portfolio Advisor</h1>
+        <p class="text-xs text-gray-400" id="last-updated">–</p>
+      </div>
+      <button onclick="refreshAll()" id="refresh-btn" class="w-9 h-9 flex items-center justify-center rounded-full bg-blue-50 text-blue-600" title="Refresh">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+      </button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="max-w-lg mx-auto flex border-t border-gray-100">
+      <button class="tab-btn tab-active" onclick="switchTab('portfolio', this)">Portfolio</button>
+      <button class="tab-btn" onclick="switchTab('manage', this)">Manage</button>
+      <button class="tab-btn" onclick="switchTab('quote', this)">Quote</button>
+      <button class="tab-btn" onclick="switchTab('advice', this)">Advice</button>
+    </div>
+  </div>
+
+  <div class="max-w-lg mx-auto px-4 pt-4 space-y-4">
+
+    <!-- ── PORTFOLIO TAB ── -->
+    <div id="tab-portfolio" class="tab-pane active space-y-4">
+
+      <!-- Total value card -->
+      <div class="card p-5">
+        <p class="text-sm text-gray-500 mb-1">Total Portfolio Value</p>
+        <div class="flex items-end gap-3">
+          <h2 class="text-4xl font-bold text-gray-900" id="total-value">$0.00</h2>
+          <span class="badge mb-1" id="total-badge">–</span>
+        </div>
+        <div class="flex gap-4 mt-2 text-sm text-gray-500">
+          <span>Cost: <span id="total-cost" class="text-gray-700 font-medium">$0.00</span></span>
+          <span>Cash: <span id="cash-display" class="text-gray-700 font-medium">$0.00</span></span>
+        </div>
+      </div>
+
+      <!-- Allocation chart -->
+      <div class="card p-4" id="chart-card" style="display:none">
+        <p class="text-sm font-semibold text-gray-600 mb-3">Allocation</p>
+        <div class="flex items-center gap-4">
+          <div style="width:130px;height:130px;flex-shrink:0">
+            <canvas id="alloc-chart"></canvas>
+          </div>
+          <div id="chart-legend" class="flex-1 space-y-1.5 text-sm"></div>
+        </div>
+      </div>
+
+      <!-- Holdings list -->
+      <div id="holdings-list" class="space-y-2"></div>
+
+      <!-- Empty state -->
+      <div id="empty-state" class="card p-8 text-center" style="display:none">
+        <div class="text-4xl mb-3">📈</div>
+        <p class="font-semibold text-gray-700">No positions yet</p>
+        <p class="text-sm text-gray-400 mt-1">Go to <strong>Manage</strong> to add stocks</p>
+      </div>
+    </div>
+
+    <!-- ── MANAGE TAB ── -->
+    <div id="tab-manage" class="tab-pane space-y-4">
+      <div class="card p-4">
+        <h3 class="font-semibold text-gray-800 mb-3">Add Position</h3>
+        <div class="space-y-3">
+          <input id="add-ticker" type="text" placeholder="Ticker (e.g. AAPL)" autocapitalize="characters" style="text-transform:uppercase" />
+          <div class="flex gap-2">
+            <input id="add-shares" type="number" placeholder="Shares" min="0.001" step="any" />
+            <input id="add-cost" type="number" placeholder="Avg cost $" min="0.01" step="any" />
+          </div>
+          <button class="btn-primary" onclick="handleAdd()">Add to Portfolio</button>
+        </div>
+      </div>
+
+      <div class="card p-4">
+        <h3 class="font-semibold text-gray-800 mb-3">Cash Balance</h3>
+        <div class="flex gap-2">
+          <input id="cash-input" type="number" placeholder="Cash balance ($)" min="0" step="any" />
+          <button onclick="handleSetCash()" class="btn-primary" style="width:auto;padding:12px 18px;border-radius:10px;white-space:nowrap">Set</button>
+        </div>
+      </div>
+
+      <div class="card p-4" id="positions-manage">
+        <h3 class="font-semibold text-gray-800 mb-3">Current Positions</h3>
+        <div id="positions-list-manage" class="space-y-2 text-sm"></div>
+      </div>
+    </div>
+
+    <!-- ── QUOTE TAB ── -->
+    <div id="tab-quote" class="tab-pane space-y-4">
+      <div class="card p-4">
+        <h3 class="font-semibold text-gray-800 mb-3">Stock Quote</h3>
+        <div class="flex gap-2">
+          <input id="quote-ticker" type="text" placeholder="Enter ticker (e.g. NVDA)" autocapitalize="characters" style="text-transform:uppercase" />
+          <button onclick="handleQuote()" class="btn-primary" style="width:auto;padding:12px 18px;border-radius:10px">Go</button>
+        </div>
+      </div>
+      <div id="quote-result" class="space-y-3"></div>
+    </div>
+
+    <!-- ── ADVICE TAB ── -->
+    <div id="tab-advice" class="tab-pane space-y-4">
+      <div class="card p-4">
+        <h3 class="font-semibold text-gray-800 mb-1">AI Portfolio Advisor</h3>
+        <p class="text-xs text-gray-400 mb-3">Powered by Claude. Your key is stored locally only.</p>
+        <div class="space-y-3">
+          <input id="api-key-input" type="password" placeholder="Anthropic API Key (sk-ant-...)" />
+          <select id="risk-select">
+            <option value="moderate">Moderate Risk</option>
+            <option value="conservative">Conservative</option>
+            <option value="aggressive">Aggressive</option>
+          </select>
+          <input id="advice-question" type="text" placeholder="Optional: ask a specific question" />
+          <button class="btn-primary" onclick="handleAdvice()">Get AI Advice</button>
+        </div>
+      </div>
+      <div id="advice-result"></div>
+    </div>
+
+  </div>
+
+  <!-- Bottom nav padding + toast -->
+  <div id="toast"></div>
+
+<script>
+// ─── State ───────────────────────────────────────────────
+const STATE_KEY = 'spa_portfolio_v1';
+let state = { positions: {}, cash: 0 };
+let quotes = {};
+let allocChart = null;
+
+function loadState() {
+  try { state = JSON.parse(localStorage.getItem(STATE_KEY)) || { positions: {}, cash: 0 }; }
+  catch { state = { positions: {}, cash: 0 }; }
+}
+function saveState() { localStorage.setItem(STATE_KEY, JSON.stringify(state)); }
+
+// ─── Tabs ─────────────────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('tab-active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('tab-active');
+  if (name === 'portfolio') renderPortfolio();
+  if (name === 'manage') renderManage();
+}
+
+// ─── Toast ────────────────────────────────────────────────
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+// ─── Stock price fetching ────────────────────────────────
+const PROXY = 'https://api.allorigins.win/raw?url=';
+
+async function fetchQuote(ticker) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`;
+  let data;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    data = await res.json();
+  } catch {
+    try {
+      const res = await fetch(PROXY + encodeURIComponent(url), { signal: AbortSignal.timeout(8000) });
+      data = await res.json();
+    } catch { return null; }
+  }
+  try {
+    const meta = data.chart.result[0].meta;
+    const price = meta.regularMarketPrice ?? meta.chartPreviousClose ?? 0;
+    const prev = meta.previousClose ?? meta.chartPreviousClose ?? price;
+    const change = price - prev;
+    const changePct = prev ? (change / prev * 100) : 0;
+    return {
+      ticker: ticker.toUpperCase(),
+      name: meta.longName || meta.shortName || ticker.toUpperCase(),
+      price, change, changePct,
+      currency: meta.currency || 'USD',
+      marketCap: meta.marketCap,
+      fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh,
+      fiftyTwoWeekLow: meta.fiftyTwoWeekLow,
+      volume: meta.regularMarketVolume,
+    };
+  } catch { return null; }
+}
+
+async function fetchAllQuotes() {
+  const tickers = Object.keys(state.positions);
+  if (!tickers.length) return;
+  await Promise.all(tickers.map(async t => {
+    const q = await fetchQuote(t);
+    if (q) quotes[t] = q;
+  }));
+}
+
+// ─── Portfolio analytics ─────────────────────────────────
+function computePortfolio() {
+  let totalValue = state.cash;
+  let totalCost = state.cash;
+  const positions = [];
+  for (const [ticker, pos] of Object.entries(state.positions)) {
+    const q = quotes[ticker];
+    const price = q ? q.price : pos.avgCost;
+    const value = pos.shares * price;
+    const cost = pos.shares * pos.avgCost;
+    totalValue += value;
+    totalCost += cost;
+    positions.push({ ticker, shares: pos.shares, avgCost: pos.avgCost, price, value, cost, gain: value - cost, gainPct: cost ? (value - cost) / cost * 100 : 0 });
+  }
+  positions.sort((a, b) => b.value - a.value);
+  const totalGain = totalValue - totalCost;
+  const totalGainPct = totalCost ? totalGain / totalCost * 100 : 0;
+  return { totalValue, totalCost, totalGain, totalGainPct, positions };
+}
+
+// ─── Render: Portfolio Tab ────────────────────────────────
+const COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#ec4899','#84cc16','#6366f1'];
+
+function fmt(n) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n); }
+function fmtPct(n) { return (n >= 0 ? '+' : '') + n.toFixed(2) + '%'; }
+
+function renderPortfolio() {
+  const { totalValue, totalCost, totalGain, totalGainPct, positions } = computePortfolio();
+  const hasPositions = positions.length > 0;
+
+  document.getElementById('total-value').textContent = fmt(totalValue);
+  document.getElementById('total-cost').textContent = fmt(totalCost);
+  document.getElementById('cash-display').textContent = fmt(state.cash);
+
+  const badge = document.getElementById('total-badge');
+  badge.textContent = fmtPct(totalGainPct) + ' (' + fmt(totalGain) + ')';
+  badge.className = 'badge ' + (totalGain >= 0 ? 'badge-gain' : 'badge-loss');
+
+  document.getElementById('empty-state').style.display = hasPositions ? 'none' : '';
+
+  // Holdings list
+  const list = document.getElementById('holdings-list');
+  list.innerHTML = positions.map((p, i) => `
+    <div class="card p-4">
+      <div class="flex items-start justify-between">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-gray-900 text-base">${p.ticker}</span>
+            ${quotes[p.ticker] ? `<span class="text-xs text-gray-400">${quotes[p.ticker].name.split(' ').slice(0,3).join(' ')}</span>` : ''}
+          </div>
+          <p class="text-xs text-gray-400 mt-0.5">${p.shares.toLocaleString()} shares · avg ${fmt(p.avgCost)}</p>
+        </div>
+        <div class="text-right">
+          <p class="font-semibold text-gray-900">${fmt(p.value)}</p>
+          <p class="text-sm ${p.gain >= 0 ? 'gain' : 'loss'}">${fmtPct(p.gainPct)}</p>
+        </div>
+      </div>
+      <div class="flex justify-between mt-3 pt-2 border-t border-gray-50 text-xs text-gray-500">
+        <span>Price: <strong class="text-gray-800">${fmt(p.price)}</strong></span>
+        <span>P&amp;L: <strong class="${p.gain >= 0 ? 'gain' : 'loss'}">${p.gain >= 0 ? '+' : ''}${fmt(p.gain)}</strong></span>
+        <span>Weight: <strong class="text-gray-800">${totalValue ? (p.value/totalValue*100).toFixed(1) : 0}%</strong></span>
+      </div>
+    </div>`).join('');
+
+  // Chart
+  const chartCard = document.getElementById('chart-card');
+  if (hasPositions) {
+    chartCard.style.display = '';
+    const labels = positions.map(p => p.ticker);
+    const data = positions.map(p => p.value);
+    const colors = positions.map((_, i) => COLORS[i % COLORS.length]);
+
+    if (allocChart) allocChart.destroy();
+    allocChart = new Chart(document.getElementById('alloc-chart'), {
+      type: 'doughnut',
+      data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] },
+      options: { plugins: { legend: { display: false } }, cutout: '68%', animation: { duration: 400 } }
+    });
+
+    document.getElementById('chart-legend').innerHTML = positions.slice(0, 6).map((p, i) =>
+      `<div class="flex items-center gap-2">
+        <span style="width:10px;height:10px;border-radius:50%;background:${colors[i]};flex-shrink:0"></span>
+        <span class="text-gray-600 truncate">${p.ticker}</span>
+        <span class="ml-auto font-medium text-gray-800">${totalValue ? (p.value/totalValue*100).toFixed(1) : 0}%</span>
+      </div>`).join('');
+  } else {
+    chartCard.style.display = 'none';
+  }
+}
+
+// ─── Render: Manage Tab ────────────────────────────────────
+function renderManage() {
+  const list = document.getElementById('positions-list-manage');
+  const positions = Object.entries(state.positions);
+  if (!positions.length) {
+    list.innerHTML = '<p class="text-gray-400 text-center py-3">No positions yet</p>';
+    return;
+  }
+  list.innerHTML = positions.map(([ticker, pos]) => `
+    <div class="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+      <div>
+        <span class="font-semibold text-gray-800">${ticker}</span>
+        <span class="text-gray-400 ml-2">${pos.shares} × ${fmt(pos.avgCost)}</span>
+      </div>
+      <button class="btn-danger" onclick="removePosition('${ticker}')">Remove</button>
+    </div>`).join('');
+  document.getElementById('cash-input').value = state.cash || '';
+}
+
+// ─── Actions ──────────────────────────────────────────────
+function handleAdd() {
+  const ticker = document.getElementById('add-ticker').value.trim().toUpperCase();
+  const shares = parseFloat(document.getElementById('add-shares').value);
+  const cost = parseFloat(document.getElementById('add-cost').value);
+  if (!ticker || isNaN(shares) || shares <= 0 || isNaN(cost) || cost <= 0) {
+    toast('Please fill in ticker, shares, and cost'); return;
+  }
+  if (state.positions[ticker]) {
+    const ex = state.positions[ticker];
+    const totalShares = ex.shares + shares;
+    state.positions[ticker] = { shares: totalShares, avgCost: (ex.shares * ex.avgCost + shares * cost) / totalShares };
+  } else {
+    state.positions[ticker] = { shares, avgCost: cost };
+  }
+  saveState();
+  document.getElementById('add-ticker').value = '';
+  document.getElementById('add-shares').value = '';
+  document.getElementById('add-cost').value = '';
+  toast(`Added ${shares} × ${ticker}`);
+  renderManage();
+}
+
+function removePosition(ticker) {
+  delete state.positions[ticker];
+  delete quotes[ticker];
+  saveState();
+  renderManage();
+  toast(`Removed ${ticker}`);
+}
+
+function handleSetCash() {
+  const v = parseFloat(document.getElementById('cash-input').value);
+  if (isNaN(v) || v < 0) { toast('Enter a valid cash amount'); return; }
+  state.cash = v;
+  saveState();
+  toast(`Cash set to ${fmt(v)}`);
+  renderManage();
+}
+
+// ─── Quote Tab ────────────────────────────────────────────
+async function handleQuote() {
+  const ticker = document.getElementById('quote-ticker').value.trim().toUpperCase();
+  if (!ticker) { toast('Enter a ticker'); return; }
+  const el = document.getElementById('quote-result');
+  el.innerHTML = `<div class="card p-5 text-center"><span class="loading-spin"></span></div>`;
+  const q = await fetchQuote(ticker);
+  if (!q) { el.innerHTML = `<div class="card p-5 text-center text-red-500">Could not fetch ${ticker}. Check ticker or try again.</div>`; return; }
+  const barW = q.fiftyTwoWeekHigh && q.fiftyTwoWeekLow ? ((q.price - q.fiftyTwoWeekLow) / (q.fiftyTwoWeekHigh - q.fiftyTwoWeekLow) * 100).toFixed(1) : null;
+  el.innerHTML = `
+    <div class="card p-5 space-y-4">
+      <div class="flex justify-between items-start">
+        <div>
+          <p class="text-xl font-bold text-gray-900">${q.name}</p>
+          <p class="text-sm text-gray-400">${q.ticker} · ${q.currency}</p>
+        </div>
+        <div class="text-right">
+          <p class="text-2xl font-bold">${fmt(q.price)}</p>
+          <p class="text-sm ${q.change >= 0 ? 'gain' : 'loss'} font-medium">${q.change >= 0 ? '+' : ''}${q.change.toFixed(2)} (${fmtPct(q.changePct)})</p>
+        </div>
+      </div>
+      ${barW !== null ? `
+      <div>
+        <div class="flex justify-between text-xs text-gray-400 mb-1"><span>52W Low ${fmt(q.fiftyTwoWeekLow)}</span><span>52W High ${fmt(q.fiftyTwoWeekHigh)}</span></div>
+        <div class="h-2 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-blue-500 rounded-full" style="width:${barW}%"></div></div>
+      </div>` : ''}
+      <div class="grid grid-cols-2 gap-3 text-sm">
+        ${q.volume ? `<div class="bg-gray-50 rounded-xl p-3"><p class="text-gray-400 text-xs">Volume</p><p class="font-semibold">${q.volume.toLocaleString()}</p></div>` : ''}
+        ${q.marketCap ? `<div class="bg-gray-50 rounded-xl p-3"><p class="text-gray-400 text-xs">Market Cap</p><p class="font-semibold">$${(q.marketCap/1e9).toFixed(2)}B</p></div>` : ''}
+      </div>
+      <button onclick="addFromQuote('${q.ticker}', ${q.price})" class="btn-primary">+ Add to Portfolio</button>
+    </div>`;
+}
+
+function addFromQuote(ticker, price) {
+  document.getElementById('add-ticker').value = ticker;
+  document.getElementById('add-cost').value = price.toFixed(2);
+  switchTab('manage', document.querySelectorAll('.tab-btn')[1]);
+  document.getElementById('add-shares').focus();
+}
+
+document.getElementById('quote-ticker').addEventListener('keydown', e => { if (e.key === 'Enter') handleQuote(); });
+
+// ─── Advice Tab ────────────────────────────────────────────
+async function handleAdvice() {
+  const apiKey = document.getElementById('api-key-input').value.trim();
+  const risk = document.getElementById('risk-select').value;
+  const question = document.getElementById('advice-question').value.trim();
+  const el = document.getElementById('advice-result');
+
+  if (!Object.keys(state.positions).length) { toast('Add positions first'); return; }
+
+  if (!apiKey) {
+    el.innerHTML = renderRuleBasedAdvice(risk);
+    return;
+  }
+
+  el.innerHTML = `<div class="card p-5 text-center space-y-2"><span class="loading-spin"></span><p class="text-sm text-gray-400">Fetching prices &amp; asking Claude…</p></div>`;
+
+  // Fetch latest quotes
+  await fetchAllQuotes();
+  const { totalValue, totalCost, totalGain, totalGainPct, positions } = computePortfolio();
+
+  const portfolioText = [
+    `Portfolio: ${fmt(totalValue)} total | ${fmt(totalCost)} cost | ${fmtPct(totalGainPct)} overall`,
+    `Cash: ${fmt(state.cash)}`,
+    '',
+    'Holdings:',
+    ...positions.map(p => `  ${p.ticker}: ${p.shares} shares @ ${fmt(p.avgCost)} avg | Now: ${fmt(p.price)} | Value: ${fmt(p.value)} | P&L: ${p.gain >= 0 ? '+' : ''}${fmt(p.gain)} (${fmtPct(p.gainPct)}) | Weight: ${totalValue ? (p.value/totalValue*100).toFixed(1) : 0}%`)
+  ].join('\n');
+
+  const userMsg = `My risk tolerance: ${risk}.\n\nPortfolio:\n${portfolioText}\n\n${question || 'Analyze my portfolio: diversification, top/underperformers, risks, and recommendations.'}`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1024,
+        system: 'You are an experienced financial analyst. Analyze the portfolio and give clear, actionable insights. Note this is not official financial advice. Be specific. Use plain text, no markdown.',
+        messages: [{ role: 'user', content: userMsg }]
+      })
+    });
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error?.message || resp.statusText);
+    }
+    const data = await resp.json();
+    const text = data.content[0].text;
+    el.innerHTML = `<div class="card p-4"><p class="text-xs font-semibold text-blue-600 mb-2">Claude Analysis</p><p class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">${text}</p></div>`;
+  } catch (err) {
+    el.innerHTML = `<div class="card p-4 text-red-600 text-sm">Error: ${err.message}</div>`;
+  }
+}
+
+function renderRuleBasedAdvice(risk) {
+  const { totalValue, totalGainPct, positions } = computePortfolio();
+  if (!positions.length) return '';
+  const sorted = [...positions].sort((a, b) => b.gainPct - a.gainPct);
+  const top = sorted[0], bottom = sorted[sorted.length - 1];
+  const concentrated = positions.filter(p => totalValue && p.value / totalValue > 0.3);
+  const winners = positions.filter(p => p.gainPct > 0);
+  const losers = positions.filter(p => p.gainPct < 0);
+
+  const points = [
+    `Overall performance: ${fmtPct(totalGainPct)}`,
+    top ? `Best performer: ${top.ticker} (${fmtPct(top.gainPct)})` : '',
+    bottom && bottom.gainPct < 0 ? `Worst performer: ${bottom.ticker} (${fmtPct(bottom.gainPct)})` : '',
+    concentrated.length ? `⚠️ Concentration risk: ${concentrated.map(p => p.ticker).join(', ')} each exceed 30% of portfolio.` : 'Positions appear reasonably distributed.',
+    positions.length < 5 ? '📌 Consider diversifying — fewer than 5 positions may increase volatility.' : '',
+    risk === 'conservative' && losers.length ? `As a conservative investor, consider reviewing: ${losers.map(p => p.ticker).join(', ')}.` : '',
+    '💡 Enter your Anthropic API key above for detailed AI-powered recommendations from Claude.',
+  ].filter(Boolean);
+
+  return `<div class="card p-4 space-y-2">
+    <p class="text-xs font-semibold text-gray-500 mb-2">Rule-Based Analysis (no API key)</p>
+    ${points.map(p => `<p class="text-sm text-gray-700">• ${p}</p>`).join('')}
+  </div>`;
+}
+
+// ─── Refresh ──────────────────────────────────────────────
+async function refreshAll() {
+  const btn = document.getElementById('refresh-btn');
+  btn.innerHTML = '<span class="loading-spin"></span>';
+  await fetchAllQuotes();
+  renderPortfolio();
+  document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>';
+}
+
+// ─── Init ─────────────────────────────────────────────────
+loadState();
+refreshAll();
+</script>
+</body>
+</html>

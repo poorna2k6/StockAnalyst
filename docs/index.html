@@ -252,7 +252,10 @@
       <div id="top-picks" class="space-y-2">
         <div class="flex items-center gap-2 text-sm text-gray-400"><span class="spin"></span> Scanning market…</div>
       </div>
-      <button class="btn btn-outline btn-sm mt-3 w-full" onclick="refreshBrief()">&#8635; Refresh Brief</button>
+      <div class="flex items-center justify-between mt-3">
+        <span class="text-xs text-gray-400" id="brief-last-updated"></span>
+        <button class="btn btn-outline btn-sm" onclick="refreshBrief()">&#8635; Refresh</button>
+      </div>
     </div>
 
     <div class="card p-4">
@@ -353,7 +356,10 @@
     <div class="card p-4">
       <div class="flex items-center justify-between mb-2">
         <div class="section-label" style="margin-bottom:0">Portfolio</div>
-        <button id="p-refresh-btn" onclick="refreshPortfolio()" style="font-size:12px;color:#3b82f6;font-weight:600;display:flex;align-items:center;gap:4px;background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:8px;touch-action:manipulation">&#8635; Refresh</button>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span class="text-xs text-gray-400" id="p-last-updated"></span>
+          <button id="p-refresh-btn" onclick="refreshPortfolio()" style="font-size:12px;color:#3b82f6;font-weight:600;display:flex;align-items:center;gap:4px;background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:8px;touch-action:manipulation">&#8635; Refresh</button>
+        </div>
       </div>
       <div class="mb-3">
         <div class="text-3xl font-black text-gray-900" id="p-total">$0.00</div>
@@ -662,7 +668,11 @@ function switchTab(name, btn){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('tab-active'));
   document.getElementById('tab-'+name).classList.add('active');
   btn.classList.add('tab-active');
-  if(name==='portfolio') renderPortfolio();
+  if(name==='portfolio'){
+    renderPortfolio();
+    if(Date.now()-_portfolioLastFetch > STALE_MS && Object.keys(portfolio).length) refreshPortfolio();
+  }
+  if(name==='brief' && Date.now()-_briefLastFetch > STALE_MS) refreshBrief();
 }
 
 // ══════════════════════════════════════════════════════
@@ -755,6 +765,8 @@ async function fetchTrending(){
 // TODAY'S BRIEF
 // ══════════════════════════════════════════════════════
 async function loadBrief(){
+  _briefLastFetch = Date.now();
+  _updateLastUpdated();
   document.getElementById('header-status').textContent = 'Loading market data…';
 
   // Load indexes in parallel with trending
@@ -900,7 +912,12 @@ Write a sharp, intelligent 3-sentence market briefing for a beginner investor. C
   } catch(e){ briefEl.textContent = 'AI brief unavailable. Check your API key in Settings.'; }
 }
 
-async function refreshBrief(){ await loadBrief(); toast('Brief refreshed'); }
+async function refreshBrief(){
+  await loadBrief();
+  _briefLastFetch = Date.now();
+  _updateLastUpdated();
+  toast('Brief refreshed');
+}
 
 // ══════════════════════════════════════════════════════
 // INVESTMENT PLANNER
@@ -1488,6 +1505,8 @@ async function refreshPortfolio(){
   const entries = Object.entries(portfolio);
   if(entries.length){
     await Promise.all(entries.map(([t])=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;})));
+    _portfolioLastFetch = Date.now();
+    _updateLastUpdated();
     renderPortfolio();
     toast('Prices updated!');
   }
@@ -1585,6 +1604,39 @@ Be specific with real ticker symbols and price levels. Assume I use Robinhood or
     el.innerHTML = `<div class="card p-4"><div class="text-red-500 text-sm">${err.message}</div></div>`;
   }
 }
+
+// ══════════════════════════════════════════════════════
+// AUTO-REFRESH
+// ══════════════════════════════════════════════════════
+const STALE_MS = 5 * 60 * 1000; // 5 minutes
+let _briefLastFetch = 0;
+let _portfolioLastFetch = 0;
+
+function _agoText(ts){
+  if(!ts) return '';
+  const m = Math.floor((Date.now()-ts)/60000);
+  if(m < 1) return 'Updated just now';
+  if(m === 1) return 'Updated 1m ago';
+  return `Updated ${m}m ago`;
+}
+
+function _updateLastUpdated(){
+  const b = document.getElementById('brief-last-updated');
+  const p = document.getElementById('p-last-updated');
+  if(b) b.textContent = _agoText(_briefLastFetch);
+  if(p) p.textContent = _agoText(_portfolioLastFetch);
+}
+
+// Tick "X ago" label every 30 seconds
+setInterval(_updateLastUpdated, 30000);
+
+// Auto-refresh active tab every 5 minutes when stale
+setInterval(()=>{
+  const active = document.querySelector('.tab-pane.active');
+  if(!active) return;
+  if(active.id==='tab-brief' && Date.now()-_briefLastFetch > STALE_MS) refreshBrief();
+  else if(active.id==='tab-portfolio' && Date.now()-_portfolioLastFetch > STALE_MS && Object.keys(portfolio).length) refreshPortfolio();
+}, 60000); // check every minute
 
 // ══════════════════════════════════════════════════════
 // INIT

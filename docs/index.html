@@ -407,54 +407,58 @@
 <div id="tab-earn" class="tab-pane space-y-4">
 
   <div class="card p-4">
-    <div class="section-label">Income Strategy Advisor</div>
-    <p class="text-sm text-gray-500 mb-3">Get personalized ideas to grow your income — from your portfolio and beyond.</p>
+    <div class="section-label">Stock Trading Income</div>
+    <p class="text-sm text-gray-500 mb-3">AI picks specific stocks and trading strategies to earn from the market — tailored to your style and portfolio.</p>
     <div class="space-y-3">
       <div>
-        <label class="text-xs font-semibold text-gray-500 block mb-1">What's your goal?</label>
+        <label class="text-xs font-semibold text-gray-500 block mb-1">Trading style</label>
         <select id="earn-goal">
-          <option value="extra_cash">Extra cash ($100–500/mo)</option>
-          <option value="side_income">Real side income ($500–2000/mo)</option>
-          <option value="passive">Build passive income (dividends, etc)</option>
-          <option value="replace">Replace or supplement salary</option>
+          <option value="dividend">Dividend income — earn quarterly payouts</option>
+          <option value="swing">Swing trading — hold days to weeks for gains</option>
+          <option value="options">Options income — covered calls &amp; cash-secured puts</option>
+          <option value="growth">Growth investing — long-term high-return stocks</option>
+          <option value="momentum">Momentum trades — ride trending stocks now</option>
         </select>
       </div>
       <div>
-        <label class="text-xs font-semibold text-gray-500 block mb-1">Time available per week</label>
+        <label class="text-xs font-semibold text-gray-500 block mb-1">Risk tolerance</label>
         <select id="earn-time">
-          <option value="minimal">Minimal (1-2 hrs, mostly passive)</option>
-          <option value="part">Part-time (5-10 hrs/wk)</option>
-          <option value="serious">Serious hustle (15+ hrs/wk)</option>
+          <option value="low">Low — preserve capital, steady income</option>
+          <option value="medium">Medium — balanced growth and income</option>
+          <option value="high">High — maximize gains, accept volatility</option>
         </select>
       </div>
       <div>
-        <label class="text-xs font-semibold text-gray-500 block mb-1">Your skills or interests (optional)</label>
-        <input id="earn-skills" type="text" placeholder="e.g. coding, design, teaching, driving, writing…" />
+        <label class="text-xs font-semibold text-gray-500 block mb-1">Approx. cash available to invest (optional)</label>
+        <input id="earn-skills" type="text" placeholder="e.g. $500, $2000, $10,000…" inputmode="decimal" />
       </div>
-      <button class="btn btn-primary" onclick="getIncomeIdeas()">Get My Income Plan</button>
+      <button class="btn btn-primary" onclick="getIncomeIdeas()">Get Stock Ideas</button>
     </div>
   </div>
 
   <div id="earn-result"></div>
 
-  <!-- Static quick-tip cards shown before AI result -->
   <div id="earn-tips" class="space-y-3">
-    <div class="section-label">Quick Wins</div>
+    <div class="section-label">Strategies At a Glance</div>
     <div class="card p-4">
-      <div class="font-semibold text-gray-800 text-sm mb-1">Dividend Investing</div>
-      <div class="text-xs text-gray-500">Stocks like SCHD, VYM, or REITs pay you quarterly just for holding. Reinvest dividends to compound faster.</div>
-    </div>
-    <div class="card p-4">
-      <div class="font-semibold text-gray-800 text-sm mb-1">High-Yield Savings / T-Bills</div>
-      <div class="text-xs text-gray-500">Park idle cash in SGOV, BIL, or a HYSA earning 4-5% APY with near-zero risk.</div>
+      <div class="font-semibold text-gray-800 text-sm mb-1">Dividend Income</div>
+      <div class="text-xs text-gray-500">SCHD, VYM, JEPI, O, REALTY — pay you every quarter just for holding. Yield 3-8% annually with little effort.</div>
     </div>
     <div class="card p-4">
       <div class="font-semibold text-gray-800 text-sm mb-1">Covered Calls</div>
-      <div class="text-xs text-gray-500">If you own 100+ shares of a stock, sell covered call options to earn premium income each month.</div>
+      <div class="text-xs text-gray-500">Own 100+ shares? Sell monthly call options and collect premium — earn 1-3% extra per month on holdings like AAPL, TSLA, MSFT.</div>
     </div>
     <div class="card p-4">
-      <div class="font-semibold text-gray-800 text-sm mb-1">Freelance Your Skills</div>
-      <div class="text-xs text-gray-500">Fiverr, Upwork, Toptal — even a few hours a week can add $200-1000/mo depending on your skill set.</div>
+      <div class="font-semibold text-gray-800 text-sm mb-1">Swing Trading</div>
+      <div class="text-xs text-gray-500">Buy oversold stocks near support, sell at resistance in 3-14 days. Target 3-8% per trade. Works well with earnings catalysts.</div>
+    </div>
+    <div class="card p-4">
+      <div class="font-semibold text-gray-800 text-sm mb-1">Cash-Secured Puts</div>
+      <div class="text-xs text-gray-500">Sell put options on stocks you'd want to buy. Collect premium upfront. If assigned, you buy shares at a discount.</div>
+    </div>
+    <div class="card p-4">
+      <div class="font-semibold text-gray-800 text-sm mb-1">T-Bills &amp; Money Market</div>
+      <div class="text-xs text-gray-500">Park idle cash in SGOV or BIL — earning ~4-5% APY risk-free while you wait for the right trade.</div>
     </div>
   </div>
 
@@ -1521,52 +1525,61 @@ async function analyzePortfolio(){
 // ══════════════════════════════════════════════════════
 async function getIncomeIdeas(){
   if(!getActiveAI()){ toast('Add a Claude or Gemini API key in Settings first'); openSettings(); return; }
-  const goal = document.getElementById('earn-goal').value;
-  const time = document.getElementById('earn-time').value;
-  const skills = document.getElementById('earn-skills').value.trim();
+  const style   = document.getElementById('earn-goal').value;
+  const risk    = document.getElementById('earn-time').value;
+  const capital = document.getElementById('earn-skills').value.trim();
   const el = document.getElementById('earn-result');
   document.getElementById('earn-tips').style.display = 'none';
-  el.innerHTML = '<div class="card p-4"><div class="flex items-center gap-2 text-sm text-gray-400"><span class="spin"></span> Building your personalized income plan…</div></div>';
+  el.innerHTML = '<div class="card p-4"><div class="flex items-center gap-2 text-sm text-gray-400"><span class="spin"></span> Finding stock opportunities for you…</div></div>';
   el.scrollIntoView({behavior:'smooth', block:'nearest'});
 
-  const goalMap = {
-    extra_cash: 'extra cash on the side ($100–500/mo)',
-    side_income: 'meaningful side income ($500–2000/mo)',
-    passive: 'passive income through investments',
-    replace: 'income to replace or supplement my salary'
+  const styleMap = {
+    dividend:  'dividend income investing (quarterly payouts, passive)',
+    swing:     'swing trading (holding positions for days to weeks)',
+    options:   'options income strategies (covered calls and cash-secured puts)',
+    growth:    'growth stock investing (long-term high-return stocks)',
+    momentum:  'momentum trading (riding strong trending stocks right now)'
   };
-  const timeMap = {
-    minimal: '1-2 hours per week (mostly passive strategies)',
-    part: '5-10 hours per week',
-    serious: '15+ hours per week (serious hustle)'
+  const riskMap = {
+    low:    'low risk (capital preservation, consistent returns)',
+    medium: 'medium risk (balanced growth and income)',
+    high:   'high risk (maximise gains, comfortable with volatility)'
   };
 
   const portfolioEntries = Object.entries(portfolio);
   let portfolioCtx = '';
   if(portfolioEntries.length){
     const totalVal = portfolioEntries.reduce((s,[t,p])=>s+p.shares*(quotes[t]?quotes[t].price:p.avgCost),0);
-    portfolioCtx = `\n\nMy current stock portfolio (total ~$${totalVal.toFixed(0)}):\n`
+    portfolioCtx = `\n\nMy current holdings (total ~$${totalVal.toFixed(0)}):\n`
       + portfolioEntries.map(([t,p])=>{
-          const val = p.shares*(quotes[t]?quotes[t].price:p.avgCost);
-          return `• ${t}: ${p.shares} shares, value ~$${val.toFixed(0)}`;
+          const price = quotes[t]?quotes[t].price:p.avgCost;
+          const val   = p.shares*price;
+          const pnl   = ((price/p.avgCost-1)*100).toFixed(1);
+          return `• ${t}: ${p.shares} shares @ $${price.toFixed(2)}, value ~$${val.toFixed(0)} (${pnl}% P&L)`;
         }).join('\n');
   }
 
-  const userMsg = `I want to earn ${goalMap[goal]} and I have ${timeMap[time]} available.`
-    + (skills ? `\nMy skills/interests: ${skills}` : '')
+  const userMsg = `I want to earn from the stock market using ${styleMap[style]} with ${riskMap[risk]}.`
+    + (capital ? `\nAvailable capital to invest: ${capital}` : '')
     + portfolioCtx
-    + `\n\nGive me a personalized income plan with these sections:
-1. **Portfolio Moves** (only if I have holdings): specific ways to make my current portfolio generate more income — e.g. dividend stocks to add, covered calls strategy, T-bill allocation, rebalancing ideas.
-2. **Side Hustle Ideas**: 3-5 specific ideas matched to my time availability and skills, with realistic monthly earning range for each.
-3. **This Week's Action**: One concrete step I can take in the next 7 days to start earning.
-Keep advice practical, beginner-friendly, and specific — not generic.`;
+    + `\n\nTODAY'S DATE: ${new Date().toDateString()}
 
-  const sys = 'You are a personal finance and income coach who gives specific, actionable advice. Format your response with clear headers and bullet points. Be encouraging but realistic about earning potential.';
+Give me a stock-market-only income plan with these sections:
+
+1. **Top Stock Picks** — name 4-6 specific stocks/ETFs with ticker symbols that fit my style and risk. For each give: entry price range, why it fits my strategy, and expected return/income.
+
+2. **My Portfolio Opportunities** (only if I have holdings above) — specific actions on stocks I already own: which to add more of, sell covered calls on (mention strike/expiry), trim, or hold. Be specific about the positions I have.
+
+3. **Trade Setup This Week** — one specific actionable trade I can execute right now: ticker, entry price, target, stop-loss, and why now.
+
+Be specific with real ticker symbols and price levels. Assume I use Robinhood or similar. No generic advice — give real names and numbers.`;
+
+  const sys = 'You are an expert stock trader and investment advisor. Give specific, actionable stock market advice with real ticker symbols and price targets. Always include concrete entry points, targets, and risk management. Format with clear sections and bullet points. Today\'s market context matters — be current and specific.';
   try{
     el.innerHTML = '<div class="card p-4"><div id="earn-stream" class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap streaming"></div></div>';
     const se = document.getElementById('earn-stream');
     let text = '';
-    await streamAI(sys, [{role:'user',content:userMsg}], 1200, chunk=>{ text+=chunk; se.textContent=text; });
+    await streamAI(sys, [{role:'user',content:userMsg}], 1500, chunk=>{ text+=chunk; se.textContent=text; });
     se.classList.remove('streaming');
   } catch(err){
     el.innerHTML = `<div class="card p-4"><div class="text-red-500 text-sm">${err.message}</div></div>`;

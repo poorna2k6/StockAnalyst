@@ -4,7 +4,113 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>My Stock Analyst</title>
+
+  <!-- PWA / Home Screen -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#1d4ed8" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="StockAnalyst" />
+  <!-- Icons injected by JS below for widest compatibility -->
+
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Generate app icon via canvas (works on iOS + Android even without static PNG files) -->
+  <script>
+  (function(){
+    function drawIcon(sz) {
+      const c = document.createElement('canvas');
+      c.width = c.height = sz;
+      const ctx = c.getContext('2d');
+      const r = sz * 0.215; // corner radius
+
+      // Gradient background
+      const g = ctx.createLinearGradient(0, 0, sz, sz);
+      g.addColorStop(0,   '#1d4ed8');
+      g.addColorStop(0.55,'#6d28d9');
+      g.addColorStop(1,   '#7c3aed');
+      ctx.beginPath();
+      ctx.moveTo(r,0); ctx.lineTo(sz-r,0); ctx.arcTo(sz,0,sz,r,r);
+      ctx.lineTo(sz,sz-r); ctx.arcTo(sz,sz,sz-r,sz,r);
+      ctx.lineTo(r,sz); ctx.arcTo(0,sz,0,sz-r,r);
+      ctx.lineTo(0,r); ctx.arcTo(0,0,r,0,r);
+      ctx.closePath();
+      ctx.fillStyle = g; ctx.fill();
+
+      // Scale helpers
+      const s = v => v * sz / 512;
+      function bar(x,y,w,h,alpha){
+        ctx.globalAlpha = alpha; ctx.fillStyle='white';
+        const rr=s(12);
+        ctx.beginPath();
+        ctx.moveTo(s(x)+rr,s(y)); ctx.lineTo(s(x+w)-rr,s(y)); ctx.arcTo(s(x+w),s(y),s(x+w),s(y)+rr,rr);
+        ctx.lineTo(s(x+w),s(y+h)-rr); ctx.arcTo(s(x+w),s(y+h),s(x+w)-rr,s(y+h),rr);
+        ctx.lineTo(s(x)+rr,s(y+h)); ctx.arcTo(s(x),s(y+h),s(x),s(y+h)-rr,rr);
+        ctx.lineTo(s(x),s(y)+rr); ctx.arcTo(s(x),s(y),s(x)+rr,s(y),rr);
+        ctx.closePath(); ctx.fill();
+      }
+      function wick(x1,y1,x2,y2,alpha){
+        ctx.globalAlpha=alpha; ctx.strokeStyle='white';
+        ctx.lineWidth=s(16); ctx.lineCap='round';
+        ctx.beginPath(); ctx.moveTo(s(x1),s(y1)); ctx.lineTo(s(x2),s(y2)); ctx.stroke();
+      }
+
+      bar(72,295,76,158, 0.72); wick(110,232,110,295, 0.72);
+      bar(206,188,76,188, 0.88); wick(244,122,244,188, 0.88);
+      bar(340,88,76,224,  1.0); wick(378,45,378,88, 1.0);
+
+      // Gold trend line
+      ctx.globalAlpha=1; ctx.strokeStyle='#FCD34D';
+      ctx.lineWidth=s(24); ctx.lineJoin='round'; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(s(110),s(260)); ctx.lineTo(s(244),s(152)); ctx.lineTo(s(378),s(72)); ctx.stroke();
+
+      // Gold dots
+      ctx.fillStyle='#FCD34D';
+      [[110,260,16],[244,152,16],[378,72,22]].forEach(([x,y,r2])=>{
+        ctx.beginPath(); ctx.arc(s(x),s(y),s(r2),0,Math.PI*2); ctx.fill();
+      });
+
+      ctx.globalAlpha=1;
+      return c.toDataURL('image/png');
+    }
+
+    // Inject icons into <head> as soon as DOM is ready
+    function injectIcons(){
+      const png192 = drawIcon(192);
+      const png512 = drawIcon(512);
+
+      // Apple touch icon (iOS home screen)
+      ['apple-touch-icon','apple-touch-icon-precomposed'].forEach(rel=>{
+        const l=document.createElement('link');
+        l.rel=rel; l.sizes='192x192'; l.href=png192;
+        document.head.appendChild(l);
+      });
+      // Standard favicon
+      const fav=document.createElement('link');
+      fav.rel='icon'; fav.type='image/png'; fav.sizes='192x192'; fav.href=png192;
+      document.head.appendChild(fav);
+
+      // Patch manifest icons dynamically so Android Chrome also uses the canvas PNG
+      if('serviceWorker' in navigator) return; // skip if SW will handle it
+      const mLink=document.querySelector('link[rel="manifest"]');
+      if(mLink){
+        fetch(mLink.href).then(r=>r.json()).then(mf=>{
+          mf.icons=[
+            {src:png192,sizes:'192x192',type:'image/png',purpose:'any maskable'},
+            {src:png512,sizes:'512x512',type:'image/png',purpose:'any maskable'},
+            {src:'icon.svg',sizes:'any',type:'image/svg+xml',purpose:'any maskable'}
+          ];
+          const blob=new Blob([JSON.stringify(mf)],{type:'application/json'});
+          mLink.href=URL.createObjectURL(blob);
+        }).catch(()=>{});
+      }
+    }
+
+    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',injectIcons);
+    else injectIcons();
+  })();
+  </script>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f4f8;color:#1e293b}

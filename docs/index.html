@@ -259,9 +259,22 @@
       <button onclick="closeSettings()" class="text-gray-400 text-2xl leading-none">&times;</button>
     </div>
     <div>
-      <label class="text-xs font-semibold text-gray-500 mb-1 block">Anthropic API Key (for AI analysis)</label>
+      <label class="text-xs font-semibold text-gray-500 mb-1 block">AI Provider</label>
+      <select id="settings-ai-pref">
+        <option value="auto">Auto (Claude if available, else Gemini)</option>
+        <option value="claude">Claude (Anthropic)</option>
+        <option value="gemini">Gemini (Google)</option>
+      </select>
+    </div>
+    <div>
+      <label class="text-xs font-semibold text-gray-500 mb-1 block">Anthropic API Key (Claude)</label>
       <input id="settings-key" type="password" placeholder="sk-ant-api03-…" />
-      <p class="text-xs text-gray-400 mt-1">Get a free key at <strong>console.anthropic.com</strong>. Stored locally on your device only.</p>
+      <p class="text-xs text-gray-400 mt-1">Get free key: <strong>console.anthropic.com</strong></p>
+    </div>
+    <div>
+      <label class="text-xs font-semibold text-gray-500 mb-1 block">Google Gemini API Key</label>
+      <input id="settings-gemini-key" type="password" placeholder="AIza…" />
+      <p class="text-xs text-gray-400 mt-1">Get free key: <strong>aistudio.google.com</strong></p>
     </div>
     <div>
       <label class="text-xs font-semibold text-gray-500 mb-1 block">Your Name (optional)</label>
@@ -287,6 +300,8 @@
 // ══════════════════════════════════════════════════════
 const SK = 'msa_state_v3';
 let apiKey = localStorage.getItem('msa_key') || '';
+let geminiKey = localStorage.getItem('msa_gemini') || '';
+let aiPref = localStorage.getItem('msa_ai_pref') || 'auto';
 let userName = localStorage.getItem('msa_name') || '';
 let portfolio = JSON.parse(localStorage.getItem('msa_portfolio') || '{}');
 let quotes = {};
@@ -337,17 +352,78 @@ function pctColor(v){ return v==null?'text-gray-400':v>=0?'gain':'loss'; }
 // ══════════════════════════════════════════════════════
 function openSettings(){
   document.getElementById('settings-key').value = apiKey;
+  document.getElementById('settings-gemini-key').value = geminiKey;
+  document.getElementById('settings-ai-pref').value = aiPref;
   document.getElementById('settings-name').value = userName;
   document.getElementById('settings-modal').classList.add('open');
 }
 function closeSettings(){ document.getElementById('settings-modal').classList.remove('open'); }
 function saveSettings(){
   apiKey = document.getElementById('settings-key').value.trim();
+  geminiKey = document.getElementById('settings-gemini-key').value.trim();
+  aiPref = document.getElementById('settings-ai-pref').value;
   userName = document.getElementById('settings-name').value.trim();
   localStorage.setItem('msa_key', apiKey);
+  localStorage.setItem('msa_gemini', geminiKey);
+  localStorage.setItem('msa_ai_pref', aiPref);
   localStorage.setItem('msa_name', userName);
   closeSettings();
-  toast('Settings saved');
+  const active = getActiveAI();
+  toast(active ? `Saved — using ${active === 'claude' ? 'Claude (Anthropic)' : 'Gemini (Google)'}` : 'Saved — add an API key to enable AI analysis');
+}
+
+// ══════════════════════════════════════════════════════
+// UNIFIED AI STREAMING
+// ══════════════════════════════════════════════════════
+function getActiveAI(){
+  if(aiPref==='claude' && apiKey) return 'claude';
+  if(aiPref==='gemini' && geminiKey) return 'gemini';
+  if(aiPref==='auto'){
+    if(apiKey) return 'claude';
+    if(geminiKey) return 'gemini';
+  }
+  return null;
+}
+
+async function streamAI(systemPrompt, messages, maxTokens, onChunk){
+  const ai = getActiveAI();
+  if(!ai) throw new Error('No API key found. Tap the gear icon → add Claude or Gemini key.');
+
+  if(ai === 'claude'){
+    const resp = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'x-api-key':apiKey,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:maxTokens,stream:true,system:systemPrompt,messages})
+    });
+    if(!resp.ok){const e=await resp.json();throw new Error('Claude: '+(e.error?.message||resp.status));}
+    const reader=resp.body.getReader(),dec=new TextDecoder();
+    while(true){
+      const{done,value}=await reader.read();if(done)break;
+      for(const line of dec.decode(value,{stream:true}).split('\n')){
+        if(!line.startsWith('data: '))continue;
+        const raw=line.slice(6).trim();if(raw==='[DONE]')break;
+        try{const ev=JSON.parse(raw);if(ev.delta?.text)onChunk(ev.delta.text);}catch{}
+      }
+    }
+  } else {
+    // Gemini
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?key=${geminiKey}&alt=sse`;
+    const contents=messages.map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:m.content}]}));
+    const resp=await fetch(url,{
+      method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({system_instruction:{parts:[{text:systemPrompt}]},contents,generationConfig:{maxOutputTokens:maxTokens}})
+    });
+    if(!resp.ok){const e=await resp.json();throw new Error('Gemini: '+(e.error?.message||resp.status));}
+    const reader=resp.body.getReader(),dec=new TextDecoder();
+    while(true){
+      const{done,value}=await reader.read();if(done)break;
+      for(const line of dec.decode(value,{stream:true}).split('\n')){
+        if(!line.startsWith('data: '))continue;
+        const raw=line.slice(6).trim();
+        try{const ev=JSON.parse(raw);const t=ev.candidates?.[0]?.content?.parts?.[0]?.text;if(t)onChunk(t);}catch{}
+      }
+    }
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -558,19 +634,18 @@ async function handleInvestmentPlan(){
   const horizonText = {short:'1–3 months (short-term trading)',medium:'3–12 months (medium-term)',long:'1–5 years (long-term hold)'}[horizon];
   const riskText = {beginner:'beginner (safety first, ETFs preferred)',moderate:'moderate (mix of growth and stability)',aggressive:'aggressive (high growth, comfortable with high volatility)'}[risk];
 
-  if(!apiKey){
-    // Rule-based plan without Claude
+  if(!getActiveAI()){
     el.innerHTML = renderRuleBasedPlan(budget, risk, horizon, validQuotes);
     return;
   }
 
+  const aiLabel = getActiveAI()==='claude'?'Claude':'Gemini';
   el.innerHTML = `<div class="card p-5 text-center space-y-2">
     <span class="spin mx-auto"></span>
-    <p class="text-sm text-gray-500 font-medium">Claude is building your personalized investment plan…</p>
+    <p class="text-sm text-gray-500 font-medium">${aiLabel} is building your personalized investment plan…</p>
   </div>`;
 
-  const systemPrompt = `You are Marcus, an expert personal investment advisor. You're helping a beginner investor who wants a clear, actionable investment plan. 
-
+  const systemPrompt = `You are Marcus, an expert personal investment advisor helping a beginner investor.
 Your response MUST follow this EXACT format (no markdown, plain text):
 
 MARKET OVERVIEW
@@ -578,85 +653,59 @@ MARKET OVERVIEW
 
 MY RECOMMENDATION FOR $[BUDGET]
 
-[For each recommended stock, use this format:]
+[For each recommended stock:]
 [TICKER] — [Company Name] ([allocation %] = $[exact dollar amount])
-Why buy: [1-2 sentences on why this stock fits their profile]
+Why buy: [1-2 sentences]
 Entry price: [current price]
 Short-term target: [price, timeframe] → Take [%] profit here
-Stop loss: [price] → Sell here to limit losses (protects [%] of investment)
-Long-term outlook: [1-2 sentences on 1-5 year view]
+Stop loss: [price] → Sell here to limit losses
+Long-term outlook: [1-2 sentences]
 
 PORTFOLIO STRATEGY
-[2-3 sentences on overall strategy, diversification]
+[2-3 sentences]
 
 SHORT-TERM PLAN (next 30-90 days)
-[Specific actions: what to watch for, when to add or reduce]
+[Specific actions]
 
 LONG-TERM PLAN (1-3+ years)
-[Strategy for building wealth over time]
+[Strategy for building wealth]
 
 BEGINNER TIPS
-[2-3 practical tips specific to this person's situation]
+[2-3 practical tips]
 
 RISK WARNING
-[1 sentence honest risk warning]
+[1 honest sentence]
 
-Important: 
-- Give SPECIFIC dollar amounts for each stock based on the exact budget
-- Give SPECIFIC price targets for entry, take-profit, and stop-loss
-- Explain financial terms simply when you use them
-- Be direct and actionable, not vague`;
+Rules: give SPECIFIC dollar amounts, SPECIFIC price targets, explain terms simply, be actionable.`;
 
   const userMsg = `I want to invest $${budget} with ${riskText} risk profile for ${horizonText}.
-${goal ? `My specific interest/goal: ${goal}` : ''}
+${goal?`My goal: ${goal}`:''}
 
-Here are the current prices for stocks in my risk category:
+Current prices:
 ${stockData}
 
-Please build my complete investment plan with exact allocations, entry prices, profit targets, stop losses, and both short-term and long-term strategies. Remember I am a beginner — explain things simply.`;
+Build my complete plan with exact allocations, entry prices, profit targets, stop losses, short-term and long-term strategies. I am a beginner — keep language simple.`;
+
+  el.innerHTML = `<div class="card p-5">
+    <div class="flex items-center gap-2 mb-3">
+      <div class="w-7 h-7 rounded-lg flex items-center justify-center" style="background:linear-gradient(135deg,#2563eb,#7c3aed)">
+        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9.663 17h4.673M12 3v1m6.364 1.636-.707.707M21 12h-1M4 12H3m3.343-5.657-.707-.707m2.828 9.9a5 5 0 117.072 0l-.347.347a3.75 3.75 0 01-5.303 0l-.347-.347z"/></svg>
+      </div>
+      <span class="font-bold text-gray-900">Your Investment Plan — $${budget.toLocaleString()}</span>
+      <span class="pill pill-b ml-auto">${aiLabel}</span>
+    </div>
+    <div id="invest-stream" class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap streaming"></div>
+  </div>
+  <div class="card p-3 text-center text-xs text-gray-400">Educational analysis only. Not financial advice. Never invest more than you can afford to lose.</div>`;
 
   try{
-    const resp = await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{
-        'x-api-key':apiKey,'anthropic-version':'2023-06-01',
-        'content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'
-      },
-      body:JSON.stringify({
-        model:'claude-sonnet-4-6', max_tokens:2000, stream:true,
-        system: systemPrompt,
-        messages:[{role:'user',content:userMsg}]
-      })
-    });
-    if(!resp.ok){ const e=await resp.json(); throw new Error(e.error?.message||'API error'); }
-
-    el.innerHTML = `<div class="card p-5">
-      <div class="flex items-center gap-2 mb-3">
-        <div class="w-7 h-7 rounded-lg flex items-center justify-center" style="background:linear-gradient(135deg,#2563eb,#7c3aed)">
-          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9.663 17h4.673M12 3v1m6.364 1.636-.707.707M21 12h-1M4 12H3m3.343-5.657-.707-.707m2.828 9.9a5 5 0 117.072 0l-.347.347a3.75 3.75 0 01-5.303 0l-.347-.347z"/></svg>
-        </div>
-        <span class="font-bold text-gray-900">Your Investment Plan — $${budget.toLocaleString()}</span>
-      </div>
-      <div id="invest-stream" class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap streaming"></div>
-    </div>
-    <div class="card p-3 text-center text-xs text-gray-400">Educational analysis only. Not financial advice. Markets carry risk — never invest more than you can afford to lose.</div>`;
-
-    const reader = resp.body.getReader(), decoder = new TextDecoder();
     const streamEl = document.getElementById('invest-stream');
     let text='';
-    while(true){
-      const {done,value} = await reader.read(); if(done) break;
-      const chunk = decoder.decode(value,{stream:true});
-      for(const line of chunk.split('\n')){
-        if(!line.startsWith('data: ')) continue;
-        const raw=line.slice(6).trim(); if(raw==='[DONE]') break;
-        try{ const ev=JSON.parse(raw); if(ev.delta?.text){ text+=ev.delta.text; streamEl.textContent=text; } }catch{}
-      }
-    }
+    await streamAI(systemPrompt,[{role:'user',content:userMsg}],2000,chunk=>{text+=chunk;streamEl.textContent=text;});
     streamEl.classList.remove('streaming');
-  } catch(err){
-    el.innerHTML = `<div class="card p-4"><p class="text-red-500 font-semibold mb-2">AI Error: ${err.message}</p><p class="text-xs text-gray-400">Showing rule-based plan instead.</p></div>`;
-    setTimeout(()=>{ el.innerHTML += renderRuleBasedPlan(budget, risk, horizon, validQuotes); }, 500);
+  }catch(err){
+    el.innerHTML=`<div class="card p-4"><p class="text-red-500 font-semibold mb-2">AI Error: ${err.message}</p><p class="text-xs text-gray-400">Showing rule-based plan instead.</p></div>`;
+    setTimeout(()=>{el.innerHTML+=renderRuleBasedPlan(budget,risk,horizon,validQuotes);},500);
   }
 }
 
@@ -764,8 +813,8 @@ async function handleChat(){
     }).join('\n');
   }
 
-  if(!apiKey){
-    // Provide data display without Claude
+  if(!getActiveAI()){
+    // Provide data display without AI
     loadEl.className = 'chat-msg-ai';
     if(tickers.length > 0){
       const qs = tickers.map(t=>quotes[t]).filter(Boolean);
@@ -775,9 +824,9 @@ async function handleChat(){
           <div class="flex justify-between text-xs text-gray-500 mt-1"><span>${q.name.substring(0,30)}</span><span class="${q.change>=0?'gain':'loss'}">${fmtN(q.changePct)}</span></div>
           ${q.hi52?`<div class="text-xs text-gray-400 mt-1">52W: ${fmt(q.lo52)} – ${fmt(q.hi52)}</div>`:''}
         </div>`).join('') +
-        `<div class="text-xs text-gray-400 mt-2 p-2 bg-blue-50 rounded-lg">Add your Anthropic API key in Settings for AI analysis with buy/sell recommendations.</div>`;
+        `<div class="text-xs text-gray-400 mt-2 p-2 bg-blue-50 rounded-lg">Add a Claude or Gemini API key in Settings for AI analysis with buy/sell recommendations.</div>`;
     } else {
-      loadEl.textContent = 'To get AI-powered analysis and recommendations, please add your Anthropic API key in Settings (gear icon at top).';
+      loadEl.textContent = 'To get AI-powered analysis and recommendations, please add a Claude or Gemini API key in Settings (gear icon at top).';
     }
     scrollChat();
     return;
@@ -786,7 +835,7 @@ async function handleChat(){
   loadEl.innerHTML = '<span class="spin"></span> <span class="text-gray-400 text-sm">Analyzing with AI…</span>';
 
   const systemPrompt = `You are Marcus, a friendly expert stock analyst helping a beginner investor. Your style:
-- Plain English, no jargon (explain terms when used)  
+- Plain English, no jargon (explain terms when used)
 - Specific and actionable: give exact prices, percentages, timeframes
 - Always cover: current situation, bull case, bear case, verdict
 - For stocks: always give a clear BUY / HOLD / AVOID opinion with reasoning
@@ -802,26 +851,10 @@ async function handleChat(){
   }
 
   try{
-    const resp = await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'x-api-key':apiKey,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,stream:true,system:systemPrompt,messages})
-    });
-    if(!resp.ok){ const e=await resp.json(); throw new Error(e.error?.message||'API error '+resp.status); }
-
     loadEl.className = 'chat-msg-ai streaming';
     loadEl.textContent = '';
     let text='';
-    const reader=resp.body.getReader(), decoder=new TextDecoder();
-    while(true){
-      const {done,value}=await reader.read(); if(done) break;
-      const chunk=decoder.decode(value,{stream:true});
-      for(const line of chunk.split('\n')){
-        if(!line.startsWith('data: ')) continue;
-        const raw=line.slice(6).trim(); if(raw==='[DONE]') break;
-        try{ const ev=JSON.parse(raw); if(ev.delta?.text){text+=ev.delta.text; loadEl.textContent=text; scrollChat();} }catch{}
-      }
-    }
+    await streamAI(systemPrompt, messages, 800, chunk=>{ text+=chunk; loadEl.textContent=text; scrollChat(); });
     loadEl.classList.remove('streaming');
     chatHistory.push({role:'assistant',content:text});
   } catch(err){
@@ -926,32 +959,17 @@ async function analyzePortfolio(){
     const q=quotes[t],price=q?q.price:pos.avgCost,value=pos.shares*price,cost=pos.shares*pos.avgCost;
     return `${t}: ${pos.shares} shares @ avg ${fmt(pos.avgCost)}, now ${fmt(price)}, P&L: ${(((price/pos.avgCost)-1)*100).toFixed(1)}%, value ${fmt(value)}`;
   });
-  if(!apiKey){
-    el.innerHTML='<div class="text-sm text-gray-500 p-3 bg-gray-50 rounded-xl">Add your Anthropic API key in Settings for AI portfolio analysis with specific buy/sell/hold recommendations.</div>';
+  if(!getActiveAI()){
+    el.innerHTML='<div class="text-sm text-gray-500 p-3 bg-gray-50 rounded-xl">Add a Claude or Gemini API key in Settings for AI portfolio analysis with specific buy/sell/hold recommendations.</div>';
     return;
   }
   try{
-    const resp = await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'x-api-key':apiKey,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:900,stream:true,
-        system:'You are a friendly personal investment advisor. Analyze portfolios in plain English for beginners. For each position, give: current status (up/down), what to do (hold/add/reduce), and why. End with overall portfolio health and top 2 action items.',
-        messages:[{role:'user',content:`Analyze my stock portfolio:\n${lines.join('\n')}\n\nI am a beginner investor. Give me specific advice on each position and overall strategy.`}]
-      })
-    });
+    const sysPrompt='You are a friendly personal investment advisor. Analyze portfolios in plain English for beginners. For each position, give: current status (up/down), what to do (hold/add/reduce), and why. End with overall portfolio health and top 2 action items.';
+    const msgs=[{role:'user',content:`Analyze my stock portfolio:\n${lines.join('\n')}\n\nI am a beginner investor. Give me specific advice on each position and overall strategy.`}];
     el.innerHTML='<div id="p-stream" class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap streaming"></div>';
     const se=document.getElementById('p-stream');
-    const reader=resp.body.getReader(),decoder=new TextDecoder();
     let text='';
-    while(true){
-      const {done,value}=await reader.read(); if(done) break;
-      const chunk=decoder.decode(value,{stream:true});
-      for(const line of chunk.split('\n')){
-        if(!line.startsWith('data: ')) continue;
-        const raw=line.slice(6).trim(); if(raw==='[DONE]') break;
-        try{const ev=JSON.parse(raw);if(ev.delta?.text){text+=ev.delta.text;se.textContent=text;}}catch{}
-      }
-    }
+    await streamAI(sysPrompt, msgs, 900, chunk=>{ text+=chunk; se.textContent=text; });
     se.classList.remove('streaming');
   } catch(err){ el.innerHTML=`<div class="text-red-500 text-sm">${err.message}</div>`; }
 }

@@ -199,10 +199,11 @@
     </button>
   </div>
   <div class="max-w-lg mx-auto flex border-t border-gray-100">
-    <button class="tab-btn tab-active" onclick="switchTab('brief',this)">Today's Brief</button>
+    <button class="tab-btn tab-active" onclick="switchTab('brief',this)">Brief</button>
     <button class="tab-btn" onclick="switchTab('invest',this)">Invest</button>
     <button class="tab-btn" onclick="switchTab('analyst',this)">Analyst</button>
     <button class="tab-btn" onclick="switchTab('portfolio',this)">Portfolio</button>
+    <button class="tab-btn" onclick="switchTab('earn',this)">Earn</button>
   </div>
 </div>
 
@@ -400,6 +401,63 @@
       <div id="p-analysis" class="mt-3"></div>
     </div>
   </div>
+</div>
+
+<!-- EARN TAB -->
+<div id="tab-earn" class="tab-pane space-y-4">
+
+  <div class="card p-4">
+    <div class="section-label">Income Strategy Advisor</div>
+    <p class="text-sm text-gray-500 mb-3">Get personalized ideas to grow your income — from your portfolio and beyond.</p>
+    <div class="space-y-3">
+      <div>
+        <label class="text-xs font-semibold text-gray-500 block mb-1">What's your goal?</label>
+        <select id="earn-goal">
+          <option value="extra_cash">Extra cash ($100–500/mo)</option>
+          <option value="side_income">Real side income ($500–2000/mo)</option>
+          <option value="passive">Build passive income (dividends, etc)</option>
+          <option value="replace">Replace or supplement salary</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-gray-500 block mb-1">Time available per week</label>
+        <select id="earn-time">
+          <option value="minimal">Minimal (1-2 hrs, mostly passive)</option>
+          <option value="part">Part-time (5-10 hrs/wk)</option>
+          <option value="serious">Serious hustle (15+ hrs/wk)</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-gray-500 block mb-1">Your skills or interests (optional)</label>
+        <input id="earn-skills" type="text" placeholder="e.g. coding, design, teaching, driving, writing…" />
+      </div>
+      <button class="btn btn-primary" onclick="getIncomeIdeas()">Get My Income Plan</button>
+    </div>
+  </div>
+
+  <div id="earn-result"></div>
+
+  <!-- Static quick-tip cards shown before AI result -->
+  <div id="earn-tips" class="space-y-3">
+    <div class="section-label">Quick Wins</div>
+    <div class="card p-4">
+      <div class="font-semibold text-gray-800 text-sm mb-1">Dividend Investing</div>
+      <div class="text-xs text-gray-500">Stocks like SCHD, VYM, or REITs pay you quarterly just for holding. Reinvest dividends to compound faster.</div>
+    </div>
+    <div class="card p-4">
+      <div class="font-semibold text-gray-800 text-sm mb-1">High-Yield Savings / T-Bills</div>
+      <div class="text-xs text-gray-500">Park idle cash in SGOV, BIL, or a HYSA earning 4-5% APY with near-zero risk.</div>
+    </div>
+    <div class="card p-4">
+      <div class="font-semibold text-gray-800 text-sm mb-1">Covered Calls</div>
+      <div class="text-xs text-gray-500">If you own 100+ shares of a stock, sell covered call options to earn premium income each month.</div>
+    </div>
+    <div class="card p-4">
+      <div class="font-semibold text-gray-800 text-sm mb-1">Freelance Your Skills</div>
+      <div class="text-xs text-gray-500">Fiverr, Upwork, Toptal — even a few hours a week can add $200-1000/mo depending on your skill set.</div>
+    </div>
+  </div>
+
 </div>
 
 <!-- Import from Screenshot Modal -->
@@ -1193,10 +1251,11 @@ CRITICAL: Read share counts carefully and keep all decimals. Do not guess or omi
 
   const holdings = Object.values(merged);
   if(!holdings.length){
-    let msg = 'No holdings found.';
-    if(errors.length) msg += ` ${errors.length} screenshot${errors.length>1?'s':''} could not be read.`;
-    msg += ' Try clearer screenshots of your Positions or Holdings screen.';
-    document.getElementById('import-status').textContent = msg;
+    const errDetail = errors.length ? errors.map(e=>e.error).join(' | ') : '';
+    document.getElementById('import-status').innerHTML =
+      `<div class="text-red-500 text-sm">No holdings found in screenshot${total>1?'s':''}.</div>` +
+      (errDetail ? `<div class="text-xs text-gray-400 mt-1">${errDetail}</div>` : '') +
+      `<div class="text-xs text-gray-400 mt-1">Make sure your screenshot shows the Positions/Holdings list with stock names and share counts clearly visible. Works best with a full-page screenshot.</div>`;
     return;
   }
 
@@ -1243,9 +1302,13 @@ async function analyzeScreenshot(file, prompt){
     text=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
   }
 
-  const match = text.match(/\[[\s\S]*?\]/);
-  if(!match) throw new Error('Could not parse holdings from image');
-  const parsed = JSON.parse(match[0]);
+  const match = text.match(/\[[\s\S]*\]/);
+  if(!match){
+    console.warn('AI screenshot response (no JSON array found):', text.slice(0,400));
+    throw new Error('AI could not read holdings. Response: ' + text.slice(0,120));
+  }
+  let parsed;
+  try{ parsed = JSON.parse(match[0]); } catch(e){ throw new Error('JSON parse failed: ' + match[0].slice(0,80)); }
   if(!Array.isArray(parsed)) throw new Error('Invalid response format');
   return parsed;
 }
@@ -1432,25 +1495,82 @@ async function analyzePortfolio(){
   if(!entries.length){ toast('Add positions first'); return; }
   const el=document.getElementById('p-analysis');
   el.innerHTML='<div class="flex items-center gap-2 text-sm text-gray-400"><span class="spin"></span> Analyzing your portfolio…</div>';
+  el.scrollIntoView({behavior:'smooth', block:'nearest'});
   await Promise.all(entries.map(([t])=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;})));
-  renderPortfolio();
   const lines = entries.map(([t,pos])=>{
     const q=quotes[t],price=q?q.price:pos.avgCost,value=pos.shares*price,cost=pos.shares*pos.avgCost;
     return `${t}: ${pos.shares} shares @ avg ${fmt(pos.avgCost)}, now ${fmt(price)}, P&L: ${(((price/pos.avgCost)-1)*100).toFixed(1)}%, value ${fmt(value)}`;
   });
   if(!getActiveAI()){
-    el.innerHTML='<div class="text-sm text-gray-500 p-3 bg-gray-50 rounded-xl">Add a Claude or Gemini API key in Settings for AI portfolio analysis with specific buy/sell/hold recommendations.</div>';
+    el.innerHTML='<div class="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-800">To get AI analysis, add a free API key in <button onclick="openSettings()" class="font-bold underline">Settings</button>. Supports Claude (Anthropic) and Gemini (Google) — both free tiers available.</div>';
     return;
   }
   try{
-    const sysPrompt='You are a friendly personal investment advisor. Analyze portfolios in plain English for beginners. For each position, give: current status (up/down), what to do (hold/add/reduce), and why. End with overall portfolio health and top 2 action items.';
-    const msgs=[{role:'user',content:`Analyze my stock portfolio:\n${lines.join('\n')}\n\nI am a beginner investor. Give me specific advice on each position and overall strategy.`}];
+    const sysPrompt='You are a friendly personal investment advisor. Analyze portfolios in plain English for beginners. For each position give: current status (up/down), what to do (hold/add/reduce), and why in 1-2 sentences. End with overall portfolio health score (1-10) and top 2 specific action items.';
+    const msgs=[{role:'user',content:`Analyze my stock portfolio:\n${lines.join('\n')}\n\nI am a beginner investor. Give specific advice on each position and overall strategy.`}];
     el.innerHTML='<div id="p-stream" class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap streaming"></div>';
     const se=document.getElementById('p-stream');
     let text='';
-    await streamAI(sysPrompt, msgs, 900, chunk=>{ text+=chunk; se.textContent=text; });
+    await streamAI(sysPrompt, msgs, 1200, chunk=>{ text+=chunk; se.textContent=text; });
     se.classList.remove('streaming');
   } catch(err){ el.innerHTML=`<div class="text-red-500 text-sm">${err.message}</div>`; }
+}
+
+// ══════════════════════════════════════════════════════
+// EARN / INCOME ADVISOR
+// ══════════════════════════════════════════════════════
+async function getIncomeIdeas(){
+  if(!getActiveAI()){ toast('Add a Claude or Gemini API key in Settings first'); openSettings(); return; }
+  const goal = document.getElementById('earn-goal').value;
+  const time = document.getElementById('earn-time').value;
+  const skills = document.getElementById('earn-skills').value.trim();
+  const el = document.getElementById('earn-result');
+  document.getElementById('earn-tips').style.display = 'none';
+  el.innerHTML = '<div class="card p-4"><div class="flex items-center gap-2 text-sm text-gray-400"><span class="spin"></span> Building your personalized income plan…</div></div>';
+  el.scrollIntoView({behavior:'smooth', block:'nearest'});
+
+  const goalMap = {
+    extra_cash: 'extra cash on the side ($100–500/mo)',
+    side_income: 'meaningful side income ($500–2000/mo)',
+    passive: 'passive income through investments',
+    replace: 'income to replace or supplement my salary'
+  };
+  const timeMap = {
+    minimal: '1-2 hours per week (mostly passive strategies)',
+    part: '5-10 hours per week',
+    serious: '15+ hours per week (serious hustle)'
+  };
+
+  const portfolioEntries = Object.entries(portfolio);
+  let portfolioCtx = '';
+  if(portfolioEntries.length){
+    const totalVal = portfolioEntries.reduce((s,[t,p])=>s+p.shares*(quotes[t]?quotes[t].price:p.avgCost),0);
+    portfolioCtx = `\n\nMy current stock portfolio (total ~$${totalVal.toFixed(0)}):\n`
+      + portfolioEntries.map(([t,p])=>{
+          const val = p.shares*(quotes[t]?quotes[t].price:p.avgCost);
+          return `• ${t}: ${p.shares} shares, value ~$${val.toFixed(0)}`;
+        }).join('\n');
+  }
+
+  const userMsg = `I want to earn ${goalMap[goal]} and I have ${timeMap[time]} available.`
+    + (skills ? `\nMy skills/interests: ${skills}` : '')
+    + portfolioCtx
+    + `\n\nGive me a personalized income plan with these sections:
+1. **Portfolio Moves** (only if I have holdings): specific ways to make my current portfolio generate more income — e.g. dividend stocks to add, covered calls strategy, T-bill allocation, rebalancing ideas.
+2. **Side Hustle Ideas**: 3-5 specific ideas matched to my time availability and skills, with realistic monthly earning range for each.
+3. **This Week's Action**: One concrete step I can take in the next 7 days to start earning.
+Keep advice practical, beginner-friendly, and specific — not generic.`;
+
+  const sys = 'You are a personal finance and income coach who gives specific, actionable advice. Format your response with clear headers and bullet points. Be encouraging but realistic about earning potential.';
+  try{
+    el.innerHTML = '<div class="card p-4"><div id="earn-stream" class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap streaming"></div></div>';
+    const se = document.getElementById('earn-stream');
+    let text = '';
+    await streamAI(sys, [{role:'user',content:userMsg}], 1200, chunk=>{ text+=chunk; se.textContent=text; });
+    se.classList.remove('streaming');
+  } catch(err){
+    el.innerHTML = `<div class="card p-4"><div class="text-red-500 text-sm">${err.message}</div></div>`;
+  }
 }
 
 // ══════════════════════════════════════════════════════

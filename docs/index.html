@@ -49,6 +49,8 @@
     .news-item:last-child{border-bottom:none}
     #settings-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:flex-end}
     #settings-modal.open{display:flex}
+    #import-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:flex-end}
+    #import-modal.open{display:flex}
     .tip-popup{display:none;position:fixed;bottom:0;left:0;right:0;background:#1e293b;color:#fff;padding:20px;border-radius:18px 18px 0 0;z-index:600;font-size:14px;line-height:1.6}
     .tip-popup.open{display:block}
     .verdict-strong-buy{background:linear-gradient(135deg,#dcfce7,#d1fae5);border:2px solid #16a34a;border-radius:14px;padding:14px}
@@ -230,6 +232,10 @@
           <input id="p-cost-p" type="number" placeholder="Avg $" min="0.01" step="any" style="flex:1" />
         </div>
         <button class="btn btn-primary" onclick="addPosition()">+ Add Position</button>
+        <div class="flex items-center gap-2 my-1"><div class="flex-1 h-px bg-gray-100"></div><span class="text-xs text-gray-400">or</span><div class="flex-1 h-px bg-gray-100"></div></div>
+        <button class="btn btn-outline w-full" onclick="importFromScreenshot()">&#128247; Import from Screenshot</button>
+        <input id="screenshot-input" type="file" accept="image/*" style="display:none" onchange="processScreenshot(this.files[0])">
+        <div class="text-xs text-gray-400 text-center">Supports Robinhood, Fidelity, Stash, Acorns &amp; more</div>
       </div>
     </div>
 
@@ -247,6 +253,21 @@
         Analyze My Portfolio with AI
       </button>
       <div id="p-analysis" class="mt-3"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Import from Screenshot Modal -->
+<div id="import-modal" onclick="if(event.target===this)closeImport()">
+  <div class="bg-white w-full rounded-t-3xl p-6 space-y-4" style="max-height:85vh;overflow-y:auto">
+    <div class="flex items-center justify-between">
+      <div class="font-bold text-gray-900 text-lg">Import Holdings</div>
+      <button onclick="closeImport()" class="text-gray-400 text-2xl leading-none">&times;</button>
+    </div>
+    <div id="import-status" class="text-sm text-gray-500"></div>
+    <div id="import-holdings" class="space-y-2"></div>
+    <div id="import-actions" style="display:none">
+      <button class="btn btn-primary" onclick="confirmImport()">Add All to Portfolio</button>
     </div>
   </div>
 </div>
@@ -879,6 +900,124 @@ function appendMsg(role, text, isLoading=false){
 function scrollChat(){ const el=document.getElementById('chat-messages'); el.scrollTop=el.scrollHeight; window.scrollTo(0,document.body.scrollHeight); }
 
 document.getElementById('chat-input').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); handleChat(); } });
+
+// ══════════════════════════════════════════════════════
+// SCREENSHOT IMPORT
+// ══════════════════════════════════════════════════════
+function importFromScreenshot(){
+  if(!getActiveAI()){ toast('Add a Claude or Gemini API key in Settings first'); openSettings(); return; }
+  document.getElementById('screenshot-input').value = '';
+  document.getElementById('screenshot-input').click();
+}
+
+async function processScreenshot(file){
+  if(!file) return;
+  const modal = document.getElementById('import-modal');
+  modal.classList.add('open');
+  document.getElementById('import-status').innerHTML = '<div class="flex items-center gap-2"><span class="spin"></span> Reading your portfolio screenshot…</div>';
+  document.getElementById('import-holdings').innerHTML = '';
+  document.getElementById('import-actions').style.display = 'none';
+
+  try{
+    const base64 = await fileToBase64(file);
+    const mediaType = file.type || 'image/jpeg';
+    const prompt = `This is a brokerage screenshot (Robinhood, Fidelity, Stash, Acorns, or similar). Extract ALL stock/ETF holdings visible. Return ONLY a valid JSON array — no explanation, no markdown. Each object must have:
+- "ticker": stock symbol string (e.g. "AAPL")
+- "shares": number of shares (decimal ok, e.g. 2.5384)
+- "avgCost": average cost paid per share (use current price if avg cost not shown)
+Example: [{"ticker":"AAPL","shares":5,"avgCost":172.50},{"ticker":"VOO","shares":1.5,"avgCost":420.00}]
+If no holdings found, return: []`;
+
+    let text = '';
+    const ai = getActiveAI();
+
+    if(ai === 'claude'){
+      const resp = await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        headers:{'x-api-key':apiKey,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
+        body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
+          {type:'text',text:prompt}
+        ]}]})
+      });
+      if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||'Claude API error');}
+      const d = await resp.json();
+      text = d.content?.[0]?.text || '';
+    } else {
+      const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+      const resp=await fetch(url,{method:'POST',headers:{'content-type':'application/json'},
+        body:JSON.stringify({contents:[{parts:[
+          {inline_data:{mime_type:mediaType,data:base64}},
+          {text:prompt}
+        ]}]})
+      });
+      if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||'Gemini API error');}
+      const d=await resp.json();
+      text=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
+    }
+
+    const match = text.match(/\[[\s\S]*?\]/);
+    if(!match) throw new Error('Could not read holdings. Try a clearer screenshot showing your positions list.');
+    const holdings = JSON.parse(match[0]);
+    if(!Array.isArray(holdings) || !holdings.length){
+      document.getElementById('import-status').textContent = 'No holdings found. Try a screenshot of your Positions or Holdings screen.';
+      return;
+    }
+    showImportConfirm(holdings);
+  } catch(err){
+    document.getElementById('import-status').innerHTML = `<div class="text-red-500 text-sm">Error: ${err.message}</div>`;
+  }
+}
+
+function fileToBase64(file){
+  return new Promise((resolve,reject)=>{
+    const r = new FileReader();
+    r.onload = e => resolve(e.target.result.split(',')[1]);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+let pendingImport = [];
+function showImportConfirm(holdings){
+  pendingImport = holdings;
+  document.getElementById('import-status').textContent = `Found ${holdings.length} holding${holdings.length>1?'s':''} — review then tap "Add All to Portfolio".`;
+  document.getElementById('import-holdings').innerHTML = holdings.map((h,i)=>`
+    <div class="bg-gray-50 rounded-xl p-3 flex items-center justify-between">
+      <div>
+        <div class="font-bold text-gray-900">${String(h.ticker).toUpperCase()}</div>
+        <div class="text-xs text-gray-500">${parseFloat(h.shares).toLocaleString()} shares &middot; avg $${parseFloat(h.avgCost).toFixed(2)}</div>
+      </div>
+      <button onclick="pendingImport.splice(${i},1);showImportConfirm(pendingImport)" class="text-red-400 text-sm font-semibold">Remove</button>
+    </div>`).join('');
+  document.getElementById('import-actions').style.display = holdings.length ? '' : 'none';
+}
+
+async function confirmImport(){
+  if(!pendingImport.length){ closeImport(); return; }
+  const count = pendingImport.length;
+  for(const h of pendingImport){
+    const ticker = String(h.ticker).trim().toUpperCase();
+    const shares = parseFloat(h.shares);
+    const avgCost = parseFloat(h.avgCost);
+    if(!ticker||isNaN(shares)||shares<=0||isNaN(avgCost)||avgCost<=0) continue;
+    if(portfolio[ticker]){
+      const e=portfolio[ticker]; const tot=e.shares+shares;
+      portfolio[ticker]={shares:tot,avgCost:(e.shares*e.avgCost+shares*avgCost)/tot};
+    } else { portfolio[ticker]={shares,avgCost}; }
+  }
+  savePortfolio();
+  await Promise.all(Object.keys(portfolio).map(t=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;})));
+  renderPortfolio();
+  closeImport();
+  switchTab('portfolio', document.querySelectorAll('.tab-btn')[3]);
+  toast(`Imported ${count} position${count>1?'s':''}!`);
+}
+
+function closeImport(){
+  document.getElementById('import-modal').classList.remove('open');
+  pendingImport = [];
+}
 
 // ══════════════════════════════════════════════════════
 // PORTFOLIO

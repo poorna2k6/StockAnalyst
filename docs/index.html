@@ -372,9 +372,9 @@
         </div>
         <button class="btn btn-primary" onclick="addPosition()">+ Add Position</button>
         <div class="flex items-center gap-2 my-1"><div class="flex-1 h-px bg-gray-100"></div><span class="text-xs text-gray-400">or</span><div class="flex-1 h-px bg-gray-100"></div></div>
-        <button class="btn btn-outline w-full" onclick="importFromScreenshot()">&#128247; Import from Screenshot</button>
-        <input id="screenshot-input" type="file" accept="image/*" style="display:none" onchange="processScreenshot(this.files[0])">
-        <div class="text-xs text-gray-400 text-center">Supports Robinhood, Fidelity, Stash, Acorns &amp; more</div>
+        <button class="btn btn-outline w-full" onclick="importFromScreenshot()">&#128247; Import from Screenshots</button>
+        <input id="screenshot-input" type="file" accept="image/*" multiple style="display:none" onchange="processScreenshots(this.files)">
+        <div class="text-xs text-gray-400 text-center">Select one or multiple screenshots &middot; Robinhood, Fidelity, Stash, Acorns &amp; more</div>
       </div>
     </div>
 
@@ -1134,63 +1134,105 @@ function importFromScreenshot(){
   document.getElementById('screenshot-input').click();
 }
 
-async function processScreenshot(file){
-  if(!file) return;
+async function processScreenshots(files){
+  if(!files || !files.length) return;
   const modal = document.getElementById('import-modal');
   modal.classList.add('open');
-  document.getElementById('import-status').innerHTML = '<div class="flex items-center gap-2"><span class="spin"></span> Reading your portfolio screenshot…</div>';
   document.getElementById('import-holdings').innerHTML = '';
   document.getElementById('import-actions').style.display = 'none';
 
-  try{
-    const base64 = await fileToBase64(file);
-    const mediaType = file.type || 'image/jpeg';
-    const prompt = `This is a brokerage screenshot (Robinhood, Fidelity, Stash, Acorns, or similar). Extract ALL stock/ETF holdings visible. Return ONLY a valid JSON array — no explanation, no markdown. Each object must have:
-- "ticker": stock symbol string (e.g. "AAPL")
-- "shares": number of shares (decimal ok, e.g. 2.5384)
-- "avgCost": average cost paid per share (use current price if avg cost not shown)
+  const total = files.length;
+  let completed = 0;
+  const updateStatus = () => {
+    document.getElementById('import-status').innerHTML =
+      `<div class="flex items-center gap-2"><span class="spin"></span> Analyzing ${completed}/${total} screenshot${total>1?'s':''} with AI…</div>`;
+  };
+  updateStatus();
+
+  const prompt = `You are analyzing a brokerage app screenshot (Robinhood, Fidelity, Stash, Acorns, Webull, Schwab, or similar).
+Extract ALL stock/ETF holdings visible. Include fractional shares.
+Return ONLY a valid JSON array — no explanation, no markdown fences. Each item must have:
+- "ticker": uppercase stock symbol (e.g. "AAPL", "VOO")
+- "shares": number of shares owned (decimal ok, e.g. 2.5384)
+- "avgCost": average cost per share (use current market price if avg cost not shown)
 Example: [{"ticker":"AAPL","shares":5,"avgCost":172.50},{"ticker":"VOO","shares":1.5,"avgCost":420.00}]
-If no holdings found, return: []`;
+If no holdings are visible, return: []`;
 
-    let text = '';
-    const ai = getActiveAI();
-
-    if(ai === 'claude'){
-      const resp = await fetch('https://api.anthropic.com/v1/messages',{
-        method:'POST',
-        headers:{'x-api-key':apiKey,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
-        body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:[
-          {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
-          {type:'text',text:prompt}
-        ]}]})
-      });
-      if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||'Claude API error');}
-      const d = await resp.json();
-      text = d.content?.[0]?.text || '';
-    } else {
-      const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
-      const resp=await fetch(url,{method:'POST',headers:{'content-type':'application/json'},
-        body:JSON.stringify({contents:[{parts:[
-          {inline_data:{mime_type:mediaType,data:base64}},
-          {text:prompt}
-        ]}]})
-      });
-      if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||'Gemini API error');}
-      const d=await resp.json();
-      text=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
+  const results = await Promise.all(Array.from(files).map(async file => {
+    try {
+      const holdings = await analyzeScreenshot(file, prompt);
+      completed++; updateStatus();
+      return { holdings };
+    } catch(e) {
+      completed++; updateStatus();
+      return { error: e.message };
     }
+  }));
 
-    const match = text.match(/\[[\s\S]*?\]/);
-    if(!match) throw new Error('Could not read holdings. Try a clearer screenshot showing your positions list.');
-    const holdings = JSON.parse(match[0]);
-    if(!Array.isArray(holdings) || !holdings.length){
-      document.getElementById('import-status').textContent = 'No holdings found. Try a screenshot of your Positions or Holdings screen.';
-      return;
+  const errors = results.filter(r => r.error);
+  const allHoldings = results.filter(r => r.holdings).flatMap(r => r.holdings);
+
+  // Deduplicate across screenshots: same ticker → keep the entry with more shares
+  // (guards against the same position appearing in multiple screenshots)
+  const merged = {};
+  for(const h of allHoldings){
+    const t = String(h.ticker||'').trim().toUpperCase();
+    if(!t) continue;
+    const shares = parseFloat(h.shares);
+    const avgCost = parseFloat(h.avgCost);
+    if(isNaN(shares)||shares<=0||isNaN(avgCost)||avgCost<=0) continue;
+    if(!merged[t] || shares > merged[t].shares){
+      merged[t] = {ticker:t, shares, avgCost};
     }
-    showImportConfirm(holdings);
-  } catch(err){
-    document.getElementById('import-status').innerHTML = `<div class="text-red-500 text-sm">Error: ${err.message}</div>`;
   }
+
+  const holdings = Object.values(merged);
+  if(!holdings.length){
+    let msg = 'No holdings found.';
+    if(errors.length) msg += ` ${errors.length} screenshot${errors.length>1?'s':''} could not be read.`;
+    msg += ' Try clearer screenshots of your Positions or Holdings screen.';
+    document.getElementById('import-status').textContent = msg;
+    return;
+  }
+  showImportConfirm(holdings, errors);
+}
+
+async function analyzeScreenshot(file, prompt){
+  const base64 = await fileToBase64(file);
+  const mediaType = file.type || 'image/jpeg';
+  const ai = getActiveAI();
+  let text = '';
+
+  if(ai === 'claude'){
+    const resp = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'x-api-key':apiKey,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:[
+        {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
+        {type:'text',text:prompt}
+      ]}]})
+    });
+    if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||'Claude API error');}
+    const d = await resp.json();
+    text = d.content?.[0]?.text || '';
+  } else {
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+    const resp=await fetch(url,{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({contents:[{parts:[
+        {inline_data:{mime_type:mediaType,data:base64}},
+        {text:prompt}
+      ]}]})
+    });
+    if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||'Gemini API error');}
+    const d=await resp.json();
+    text=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
+  }
+
+  const match = text.match(/\[[\s\S]*?\]/);
+  if(!match) throw new Error('Could not parse holdings from image');
+  const parsed = JSON.parse(match[0]);
+  if(!Array.isArray(parsed)) throw new Error('Invalid response format');
+  return parsed;
 }
 
 function fileToBase64(file){
@@ -1203,23 +1245,36 @@ function fileToBase64(file){
 }
 
 let pendingImport = [];
-function showImportConfirm(holdings){
+function showImportConfirm(holdings, errors=[]){
   pendingImport = holdings;
-  document.getElementById('import-status').textContent = `Found ${holdings.length} holding${holdings.length>1?'s':''} — review then tap "Add All to Portfolio".`;
-  document.getElementById('import-holdings').innerHTML = holdings.map((h,i)=>`
-    <div class="bg-gray-50 rounded-xl p-3 flex items-center justify-between">
+  const newCount = holdings.filter(h=>!portfolio[String(h.ticker).toUpperCase()]).length;
+  const updateCount = holdings.length - newCount;
+  let statusParts = [`Found ${holdings.length} holding${holdings.length>1?'s':''}`];
+  if(newCount && updateCount) statusParts.push(`(${newCount} new, ${updateCount} will update existing)`);
+  else if(updateCount) statusParts.push(`(all updating existing positions)`);
+  statusParts.push('— review then tap "Add All to Portfolio".');
+  if(errors.length) statusParts.push(`⚠ ${errors.length} screenshot${errors.length>1?'s':''} could not be read.`);
+  document.getElementById('import-status').textContent = statusParts.join(' ');
+  document.getElementById('import-holdings').innerHTML = holdings.map((h,i)=>{
+    const t = String(h.ticker).toUpperCase();
+    const exists = !!portfolio[t];
+    const badge = exists
+      ? `<span style="font-size:10px;background:#dbeafe;color:#1d4ed8;border-radius:4px;padding:1px 5px;margin-left:4px">update</span>`
+      : `<span style="font-size:10px;background:#dcfce7;color:#16a34a;border-radius:4px;padding:1px 5px;margin-left:4px">new</span>`;
+    return `<div class="bg-gray-50 rounded-xl p-3 flex items-center justify-between">
       <div>
-        <div class="font-bold text-gray-900">${String(h.ticker).toUpperCase()}</div>
-        <div class="text-xs text-gray-500">${parseFloat(h.shares).toLocaleString()} shares &middot; avg $${parseFloat(h.avgCost).toFixed(2)}</div>
+        <div class="font-bold text-gray-900" style="display:flex;align-items:center">${t}${badge}</div>
+        <div class="text-xs text-gray-500">${parseFloat(h.shares).toLocaleString(undefined,{maximumFractionDigits:4})} shares &middot; avg $${parseFloat(h.avgCost).toFixed(2)}</div>
       </div>
       <button onclick="pendingImport.splice(${i},1);showImportConfirm(pendingImport)" class="text-red-400 text-sm font-semibold">Remove</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   document.getElementById('import-actions').style.display = holdings.length ? '' : 'none';
 }
 
 async function confirmImport(){
   if(!pendingImport.length){ closeImport(); return; }
-  const count = pendingImport.length;
+  let added = 0, updated = 0;
   for(const h of pendingImport){
     const ticker = String(h.ticker).trim().toUpperCase();
     const shares = parseFloat(h.shares);
@@ -1228,14 +1283,21 @@ async function confirmImport(){
     if(portfolio[ticker]){
       const e=portfolio[ticker]; const tot=e.shares+shares;
       portfolio[ticker]={shares:tot,avgCost:(e.shares*e.avgCost+shares*avgCost)/tot};
-    } else { portfolio[ticker]={shares,avgCost}; }
+      updated++;
+    } else {
+      portfolio[ticker]={shares,avgCost};
+      added++;
+    }
   }
   savePortfolio();
   await Promise.all(Object.keys(portfolio).map(t=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;})));
   renderPortfolio();
   closeImport();
   switchTab('portfolio', document.querySelectorAll('.tab-btn')[3]);
-  toast(`Imported ${count} position${count>1?'s':''}!`);
+  const parts = [];
+  if(added) parts.push(`${added} added`);
+  if(updated) parts.push(`${updated} updated`);
+  toast(`Portfolio: ${parts.join(', ')}!`);
 }
 
 function closeImport(){

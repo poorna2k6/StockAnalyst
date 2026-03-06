@@ -113,7 +113,7 @@
   </script>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f4f8;color:#1e293b}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f4f8;color:#1e293b;transition:background .2s,color .2s}
     .tab-active{color:#2563eb;font-weight:700;border-bottom:3px solid #2563eb}
     .tab-btn{padding:12px 0;flex:1;text-align:center;font-size:12px;color:#94a3b8;letter-spacing:.4px;border-bottom:3px solid transparent;transition:all .15s;cursor:pointer}
     .card{background:#fff;border-radius:18px;box-shadow:0 1px 8px rgba(0,0,0,.08)}
@@ -163,6 +163,43 @@
     .verdict-buy{background:linear-gradient(135deg,#eff6ff,#dbeafe);border:2px solid #2563eb;border-radius:14px;padding:14px}
     .verdict-hold{background:linear-gradient(135deg,#fefce8,#fef3c7);border:2px solid #f59e0b;border-radius:14px;padding:14px}
     .verdict-avoid{background:linear-gradient(135deg,#fff1f2,#fee2e2);border:2px solid #ef4444;border-radius:14px;padding:14px}
+    .copy-btn{background:none;border:none;cursor:pointer;font-size:12px;color:#94a3b8;padding:4px 8px;border-radius:8px;margin-top:4px;display:inline-flex;align-items:center;gap:4px;transition:color .15s}
+    .copy-btn:hover{color:#475569}
+    /* ── Dark Mode ── */
+    body.dark{background:#0f172a;color:#f1f5f9}
+    body.dark .bg-white{background:#1e293b!important}
+    body.dark .card{background:#1e293b;box-shadow:0 1px 8px rgba(0,0,0,.3)}
+    body.dark .tab-btn{color:#64748b}
+    body.dark .tab-active{color:#60a5fa;border-bottom-color:#60a5fa}
+    body.dark .bg-gray-50{background:#0f172a!important}
+    body.dark .bg-gray-100{background:#334155!important}
+    body.dark .text-gray-900{color:#f1f5f9!important}
+    body.dark .text-gray-800{color:#e2e8f0!important}
+    body.dark .text-gray-700{color:#cbd5e1!important}
+    body.dark .text-gray-600{color:#94a3b8!important}
+    body.dark .text-gray-500{color:#64748b!important}
+    body.dark .text-gray-400{color:#475569!important}
+    body.dark .border-gray-100{border-color:#334155!important}
+    body.dark .border-gray-50{border-color:#1e293b!important}
+    body.dark .shadow-sm{box-shadow:0 1px 4px rgba(0,0,0,.4)!important}
+    body.dark input,body.dark select,body.dark textarea{background:#1e293b;border-color:#334155;color:#f1f5f9}
+    body.dark input:focus,body.dark select:focus,body.dark textarea:focus{background:#1e293b;border-color:#3b82f6}
+    body.dark .chat-msg-ai{background:#1e293b;color:#f1f5f9}
+    body.dark .metric-row{border-bottom-color:#334155}
+    body.dark .pill-gr{background:#334155;color:#94a3b8}
+    body.dark .pill-g{background:#14532d;color:#86efac}
+    body.dark .pill-r{background:#7f1d1d;color:#fca5a5}
+    body.dark .pill-y{background:#713f12;color:#fcd34d}
+    body.dark .pill-b{background:#1e3a5f;color:#93c5fd}
+    body.dark .btn-outline{background:#1e293b;border-color:#334155;color:#94a3b8}
+    body.dark .insight-buy{background:#14532d;color:#86efac}
+    body.dark .insight-risk{background:#431407;color:#fdba74}
+    body.dark .insight-info{background:#1e3a5f;color:#93c5fd}
+    body.dark #settings-modal>div,body.dark #import-modal>div{background:#1e293b}
+    body.dark .sticky{background:#1e293b!important}
+    body.dark .range-bar{background:#334155}
+    body.dark .copy-btn{color:#475569}
+    body.dark .copy-btn:hover{color:#94a3b8}
   </style>
 </head>
 <body class="pb-28">
@@ -194,15 +231,22 @@
         <div class="text-xs leading-tight" id="header-status" style="color:#7c3aed;font-weight:600">Loading market data…</div>
       </div>
     </div>
-    <button onclick="openSettings()" class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500">
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
-    </button>
+    <div class="flex items-center gap-1.5">
+      <button id="dark-toggle" onclick="toggleDark()" class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500" title="Toggle dark mode">
+        <svg id="dark-icon-moon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z"/></svg>
+        <svg id="dark-icon-sun" class="w-5 h-5" style="display:none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" stroke-width="2"/><path stroke-linecap="round" stroke-width="2" d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      </button>
+      <button onclick="openSettings()" class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </div>
   </div>
   <div class="max-w-lg mx-auto flex border-t border-gray-100">
     <button class="tab-btn tab-active" onclick="switchTab('brief',this)">Brief</button>
     <button class="tab-btn" onclick="switchTab('invest',this)">Invest</button>
     <button class="tab-btn" onclick="switchTab('analyst',this)">Analyst</button>
     <button class="tab-btn" onclick="switchTab('portfolio',this)">Portfolio</button>
+    <button class="tab-btn" onclick="switchTab('watch',this)">Watch</button>
     <button class="tab-btn" onclick="switchTab('earn',this)">Earn</button>
   </div>
 </div>
@@ -358,6 +402,7 @@
         <div class="section-label" style="margin-bottom:0">Portfolio</div>
         <div style="display:flex;align-items:center;gap:6px">
           <span class="text-xs text-gray-400" id="p-last-updated"></span>
+          <button id="p-export-btn" onclick="exportPortfolioCSV()" style="font-size:12px;color:#16a34a;font-weight:600;display:none;align-items:center;gap:4px;background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:8px;touch-action:manipulation">⬇ CSV</button>
           <button id="p-refresh-btn" onclick="refreshPortfolio()" style="font-size:12px;color:#3b82f6;font-weight:600;display:flex;align-items:center;gap:4px;background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:8px;touch-action:manipulation">&#8635; Refresh</button>
         </div>
       </div>
@@ -408,6 +453,24 @@
     </div>
   </div>
 </div>
+
+  <!-- ══════════════════════════════════════
+       TAB 5: WATCHLIST
+  ══════════════════════════════════════ -->
+  <div id="tab-watch" class="tab-pane space-y-4">
+    <div class="card p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div class="section-label" style="margin-bottom:0">Watchlist</div>
+        <button onclick="refreshWatchlist()" style="font-size:12px;color:#3b82f6;font-weight:600;display:flex;align-items:center;gap:4px;background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:8px">&#8635; Refresh All</button>
+      </div>
+      <div id="watch-list"></div>
+      <div id="watch-empty" class="py-8 text-center" style="display:none">
+        <div class="text-4xl mb-2">⭐</div>
+        <div class="font-semibold text-gray-600">No stocks watched yet</div>
+        <div class="text-sm text-gray-400 mt-1">Tap the ☆ star icon on any stock in Brief or Analyst to add it here</div>
+      </div>
+    </div>
+  </div>
 
   <!-- EARN TAB -->
   <div id="tab-earn" class="tab-pane space-y-4">
@@ -541,6 +604,8 @@ let userName = localStorage.getItem('msa_name') || '';
 let portfolio = JSON.parse(localStorage.getItem('msa_portfolio') || '{}');
 let quotes = {};
 let chatHistory = [];
+let watchlist = JSON.parse(localStorage.getItem('msa_watchlist') || '[]');
+let _darkMode = localStorage.getItem('msa_dark') === '1';
 
 const TIPS = {
   pe: { title: 'P/E Ratio (Price-to-Earnings)', body: 'How much you pay for $1 of company earnings. P/E of 20 means you pay $20 for every $1 the company earns. Lower can mean cheaper, but growing companies often have higher P/E.' },
@@ -675,6 +740,12 @@ function switchTab(name, btn){
     if(Date.now()-_portfolioLastFetch > STALE_MS && Object.keys(portfolio).length) refreshPortfolio();
   }
   if(name==='brief' && Date.now()-_briefLastFetch > STALE_MS) refreshBrief();
+  if(name==='watch'){
+    renderWatchlist();
+    // Fetch any missing quotes
+    const missing = watchlist.filter(t=>!quotes[t]);
+    if(missing.length) Promise.all(missing.map(t=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;}))).then(()=>renderWatchlist());
+  }
 }
 function goToTab(name){
   const btn = Array.from(document.querySelectorAll('.tab-btn')).find(b=>b.getAttribute('onclick')?.includes(`'${name}'`));
@@ -868,8 +939,8 @@ async function loadBrief(){
     const q = pickQuotes[i]; if(!q) return '';
     const barPct = q.hi52&&q.lo52?Math.max(0,Math.min(100,(q.price-q.lo52)/(q.hi52-q.lo52)*100)):null;
     const signal = barPct!==null ? (barPct>75?{label:'Near High',cls:'pill-r'}:barPct<30?{label:'Near Low',cls:'pill-g'}:null) : null;
-    return `<div class="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0 cursor-pointer active:bg-gray-50 rounded-lg px-1 -mx-1" onclick="quickAsk('Give me a full analysis of ${t} with a buy/hold/avoid verdict and entry price target')">
-      <div class="flex-1 min-w-0">
+    return `<div class="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0 rounded-lg px-1 -mx-1">
+      <div class="flex-1 min-w-0 cursor-pointer active:bg-gray-50" onclick="quickAsk('Give me a full analysis of ${t} with a buy/hold/avoid verdict and entry price target')">
         <div class="flex items-center gap-1.5 flex-wrap">
           <span class="font-bold text-gray-900 text-sm">${esc(t)}</span>
           ${signal?`<span class="pill ${signal.cls}" style="font-size:9px;padding:1px 6px">${esc(signal.label)}</span>`:''}
@@ -877,11 +948,11 @@ async function loadBrief(){
         </div>
         ${barPct!==null?`<div class="flex items-center gap-1.5 mt-1"><div class="range-bar flex-1" style="max-width:80px"><div class="range-fill ${barPct>65?'bg-green-400':barPct<35?'bg-red-400':'bg-yellow-400'}" style="width:${barPct}%"></div></div><span class="text-xs text-gray-400">${barPct.toFixed(0)}% of 52W</span></div>`:''}
       </div>
-      <div class="text-right ml-2">
+      <div class="text-right ml-2 cursor-pointer" onclick="quickAsk('Give me a full analysis of ${t} with a buy/hold/avoid verdict and entry price target')">
         <div class="font-bold text-gray-900 text-sm">${fmt(q.price)}</div>
         <div class="text-xs font-semibold ${q.change>=0?'gain':'loss'}">${fmtN(q.changePct)}</div>
       </div>
-      <svg class="w-4 h-4 text-gray-300 ml-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      <button onclick="toggleWatchlist('${esc(t)}')" id="wl-star-${esc(t)}" style="background:none;border:none;cursor:pointer;padding:4px 6px;font-size:18px;line-height:1;flex-shrink:0;color:${watchlist.includes(t)?'#f59e0b':'#cbd5e1'}" title="Add to watchlist">${watchlist.includes(t)?'★':'☆'}</button>
     </div>`;
   }).join('');
 
@@ -889,8 +960,8 @@ async function loadBrief(){
   pickTickers.forEach((t,i) => { if(pickQuotes[i]) quotes[t] = pickQuotes[i]; });
   idxQuotes.forEach((q,i) => { if(q) quotes[INDEXES[i].ticker] = q; });
 
-  document.getElementById('header-status').textContent = 'Live · ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
   document.getElementById('brief-time').textContent = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  updateMarketCountdown();
 
   // Fire AI brief (non-blocking)
   loadAIBrief(idxQuotes, pickQuotes, pickTickers);
@@ -1205,6 +1276,25 @@ STYLE RULES:
     await streamAI(systemPrompt, messages, 800, chunk=>{ text+=chunk; loadEl.textContent=text; scrollChat(); });
     loadEl.classList.remove('streaming');
     chatHistory.push({role:'assistant',content:text});
+    addCopyBtn(loadEl);
+    // Add watchlist star buttons for mentioned tickers
+    if(tickers.length){
+      const starRow = document.createElement('div');
+      starRow.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-top:4px';
+      tickers.forEach(t=>{
+        const btn = document.createElement('button');
+        btn.style.cssText=`background:none;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-size:12px;padding:3px 8px;color:${watchlist.includes(t)?'#f59e0b':'#94a3b8'};display:inline-flex;align-items:center;gap:3px`;
+        btn.innerHTML = `${watchlist.includes(t)?'★':'☆'} ${esc(t)}`;
+        btn.onclick = ()=>{
+          toggleWatchlist(t);
+          btn.style.color = watchlist.includes(t) ? '#f59e0b' : '#94a3b8';
+          btn.innerHTML = `${watchlist.includes(t)?'★':'☆'} ${esc(t)}`;
+        };
+        starRow.appendChild(btn);
+      });
+      const chatEl = document.getElementById('chat-messages');
+      chatEl.appendChild(starRow);
+    }
   } catch(err){
     loadEl.className='chat-msg-ai';
     loadEl.textContent=`Error: ${err.message}. Please check your API key in Settings.`;
@@ -1223,6 +1313,17 @@ function appendMsg(role, text, isLoading=false){
   el.appendChild(div);
   scrollChat();
   return div;
+}
+
+function addCopyBtn(msgEl){
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.innerHTML = '📋 Copy';
+  btn.onclick = ()=>{
+    const txt = msgEl.textContent || msgEl.innerText;
+    navigator.clipboard.writeText(txt).then(()=>toast('Copied to clipboard!')).catch(()=>toast('Copy failed'));
+  };
+  msgEl.parentNode.insertBefore(btn, msgEl.nextSibling);
 }
 function scrollChat(){ const el=document.getElementById('chat-messages'); el.scrollTop=el.scrollHeight; window.scrollTo(0,document.body.scrollHeight); }
 
@@ -1464,6 +1565,8 @@ function renderPortfolio(){
   const hasPositions = entries.length > 0;
   document.getElementById('p-empty').style.display = hasPositions?'none':'';
   document.getElementById('p-analyze-card').style.display = hasPositions?'':'none';
+  const expBtn = document.getElementById('p-export-btn');
+  if(expBtn) expBtn.style.display = hasPositions ? 'flex' : 'none';
 
   let totalValue=0, totalCost=0, todayGain=0, todayKnown=false;
   const rows = entries.map(([t,pos])=>{
@@ -1668,10 +1771,174 @@ setInterval(()=>{
 }, 60000); // check every minute
 
 // ══════════════════════════════════════════════════════
+// DARK MODE (Feature 1)
+// ══════════════════════════════════════════════════════
+function applyDark(dark){
+  document.body.classList.toggle('dark', dark);
+  const moon = document.getElementById('dark-icon-moon');
+  const sun = document.getElementById('dark-icon-sun');
+  if(moon) moon.style.display = dark ? 'none' : '';
+  if(sun) sun.style.display = dark ? '' : 'none';
+}
+function toggleDark(){
+  _darkMode = !_darkMode;
+  localStorage.setItem('msa_dark', _darkMode ? '1' : '0');
+  applyDark(_darkMode);
+}
+
+// ══════════════════════════════════════════════════════
+// MARKET CLOSE COUNTDOWN (Feature 3)
+// ══════════════════════════════════════════════════════
+function updateMarketCountdown(){
+  const el = document.getElementById('header-status');
+  if(!el) return;
+  const cur = el.textContent;
+  // Don't override the loading state
+  if(cur.startsWith('Loading')) return;
+  const now = new Date();
+  const etNow = new Date(now.toLocaleString('en-US', {timeZone:'America/New_York'}));
+  const etHour = etNow.getHours(), etMin = etNow.getMinutes(), etDay = etNow.getDay();
+  const isWeekend = etDay === 0 || etDay === 6;
+  const isMarketHours = !isWeekend && (etHour > 9 || (etHour === 9 && etMin >= 30)) && etHour < 16;
+  const isPreMarket = !isWeekend && etHour >= 4 && (etHour < 9 || (etHour === 9 && etMin < 30));
+
+  if(isMarketHours){
+    // Time until 4 PM ET
+    const closeMin = (16 - etHour) * 60 - etMin;
+    const h = Math.floor(closeMin / 60), m = closeMin % 60;
+    el.textContent = h > 0 ? `Live · ${h}h ${m}m left` : `Live · ${m}m left`;
+  } else if(isPreMarket){
+    // Time until 9:30 AM ET
+    const totalMin = (9 - etHour) * 60 + (30 - etMin);
+    const h = Math.floor(totalMin / 60), m = totalMin % 60;
+    el.textContent = h > 0 ? `Pre-market · Opens in ${h}h ${m}m` : `Pre-market · Opens in ${m}m`;
+  } else {
+    // Closed/weekend — show last close timestamp
+    const closeTime = new Date(etNow);
+    // Set to last 4 PM ET close on a weekday
+    closeTime.setHours(16, 0, 0, 0);
+    if(closeTime > etNow) closeTime.setDate(closeTime.getDate() - 1); // yesterday's close
+    el.textContent = 'Last close · ' + closeTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  }
+}
+setInterval(updateMarketCountdown, 60000);
+
+// ══════════════════════════════════════════════════════
+// WATCHLIST (Feature 2)
+// ══════════════════════════════════════════════════════
+function saveWatchlist(){ localStorage.setItem('msa_watchlist', JSON.stringify(watchlist)); }
+
+function toggleWatchlist(ticker){
+  const t = ticker.toUpperCase();
+  const idx = watchlist.indexOf(t);
+  if(idx === -1){
+    watchlist.push(t);
+    toast(`${t} added to watchlist ⭐`);
+  } else {
+    watchlist.splice(idx, 1);
+    toast(`${t} removed from watchlist`);
+  }
+  saveWatchlist();
+  // Update star buttons in current view
+  document.querySelectorAll(`[id="wl-star-${t}"]`).forEach(btn=>{
+    btn.style.color = watchlist.includes(t) ? '#f59e0b' : '#cbd5e1';
+    btn.textContent = watchlist.includes(t) ? '★' : '☆';
+  });
+  // Re-render watchlist if on that tab
+  const watchTab = document.getElementById('tab-watch');
+  if(watchTab && watchTab.classList.contains('active')) renderWatchlist();
+}
+
+function renderWatchlist(){
+  const listEl = document.getElementById('watch-list');
+  const emptyEl = document.getElementById('watch-empty');
+  if(!listEl) return;
+  if(!watchlist.length){
+    listEl.innerHTML = '';
+    if(emptyEl) emptyEl.style.display = '';
+    return;
+  }
+  if(emptyEl) emptyEl.style.display = 'none';
+  listEl.innerHTML = watchlist.map(t=>{
+    const q = quotes[t];
+    if(!q) return `<div class="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0 px-1">
+      <div class="flex items-center gap-2"><span class="spin" style="width:14px;height:14px;border-width:2px"></span><span class="font-bold text-gray-900 text-sm">${esc(t)}</span></div>
+      <button onclick="removeFromWatchlist('${esc(t)}')" style="background:none;border:none;cursor:pointer;color:#f87171;font-size:18px;line-height:1;padding:4px">×</button>
+    </div>`;
+    const barPct = q.hi52&&q.lo52 ? Math.max(0,Math.min(100,(q.price-q.lo52)/(q.hi52-q.lo52)*100)) : null;
+    return `<div class="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0 rounded-lg px-1 cursor-pointer" onclick="quickAsk('Give me a full analysis of ${t} with a buy/hold/avoid verdict and entry price target')">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <span class="font-bold text-gray-900 text-sm">${esc(t)}</span>
+          <span class="text-xs text-gray-400 truncate">${esc(q.name.split(' ').slice(0,3).join(' '))}</span>
+        </div>
+        ${barPct!==null?`<div class="flex items-center gap-1.5 mt-1"><div class="range-bar flex-1" style="max-width:80px"><div class="range-fill ${barPct>65?'bg-green-400':barPct<35?'bg-red-400':'bg-yellow-400'}" style="width:${barPct}%"></div></div><span class="text-xs text-gray-400">${barPct.toFixed(0)}% of 52W</span></div>`:''}
+      </div>
+      <div class="text-right mx-2">
+        <div class="font-bold text-gray-900 text-sm">${fmt(q.price)}</div>
+        <div class="text-xs font-semibold ${q.change>=0?'gain':'loss'}">${fmtN(q.changePct)}</div>
+      </div>
+      <button onclick="event.stopPropagation();removeFromWatchlist('${esc(t)}')" style="background:none;border:none;cursor:pointer;color:#f87171;font-size:20px;line-height:1;padding:4px;flex-shrink:0">×</button>
+    </div>`;
+  }).join('');
+}
+
+function removeFromWatchlist(ticker){
+  const t = ticker.toUpperCase();
+  watchlist = watchlist.filter(x=>x!==t);
+  saveWatchlist();
+  renderWatchlist();
+  // update any visible stars
+  document.querySelectorAll(`[id="wl-star-${t}"]`).forEach(btn=>{
+    btn.style.color = '#cbd5e1';
+    btn.textContent = '☆';
+  });
+  toast(`${t} removed from watchlist`);
+}
+
+async function refreshWatchlist(){
+  if(!watchlist.length) return;
+  toast('Refreshing watchlist…');
+  await Promise.all(watchlist.map(t=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;})));
+  renderWatchlist();
+  toast('Watchlist updated!');
+}
+
+// ══════════════════════════════════════════════════════
+// EXPORT PORTFOLIO CSV (Feature 4)
+// ══════════════════════════════════════════════════════
+function exportPortfolioCSV(){
+  const entries = Object.entries(portfolio);
+  if(!entries.length){ toast('No positions to export'); return; }
+  const rows = [['Ticker','Shares','Avg Cost','Current Price','Total Value','P&L $','P&L %']];
+  entries.forEach(([t,pos])=>{
+    const q = quotes[t];
+    const price = q ? q.price : pos.avgCost;
+    const value = pos.shares * price;
+    const cost = pos.shares * pos.avgCost;
+    const pnl = value - cost;
+    const pnlPct = cost ? (pnl / cost * 100) : 0;
+    rows.push([t, pos.shares, pos.avgCost.toFixed(2), price.toFixed(2), value.toFixed(2), pnl.toFixed(2), pnlPct.toFixed(2)+'%']);
+  });
+  const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const d = new Date();
+  const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  a.href = url; a.download = `portfolio-${ds}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('Portfolio exported as CSV!');
+}
+
+// ══════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════
+applyDark(_darkMode);
 loadBrief();
 renderPortfolio();
+renderWatchlist();
 </script>
 </body>
 </html>

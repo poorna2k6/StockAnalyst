@@ -350,14 +350,20 @@
   <div id="tab-portfolio" class="tab-pane space-y-4">
 
     <div class="card p-4">
-      <div class="section-label">Portfolio Summary</div>
-      <div class="flex items-end gap-3 mb-3">
+      <div class="flex items-center justify-between mb-2">
+        <div class="section-label" style="margin-bottom:0">Portfolio</div>
+        <button id="p-refresh-btn" onclick="refreshPortfolio()" style="font-size:12px;color:#3b82f6;font-weight:600;display:flex;align-items:center;gap:4px;background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:8px;touch-action:manipulation">&#8635; Refresh</button>
+      </div>
+      <div class="mb-3">
         <div class="text-3xl font-black text-gray-900" id="p-total">$0.00</div>
-        <span class="pill pill-gr mb-1" id="p-badge">–</span>
+        <div class="flex items-center gap-1.5 mt-1">
+          <span class="font-semibold text-sm text-gray-400" id="p-today-gain">–</span>
+          <span class="text-xs text-gray-400" id="p-today-label" style="display:none">today</span>
+        </div>
       </div>
       <div class="grid grid-cols-3 gap-2 text-center">
         <div class="bg-gray-50 rounded-xl p-2"><div class="text-xs text-gray-400">Invested</div><div class="font-bold text-sm text-gray-800" id="p-cost">$0</div></div>
-        <div class="bg-gray-50 rounded-xl p-2"><div class="text-xs text-gray-400">Gain/Loss</div><div class="font-bold text-sm" id="p-gain">$0</div></div>
+        <div class="bg-gray-50 rounded-xl p-2"><div class="text-xs text-gray-400">Total P&amp;L</div><div class="font-bold text-sm" id="p-gain">$0</div></div>
         <div class="bg-gray-50 rounded-xl p-2"><div class="text-xs text-gray-400">Return</div><div class="font-bold text-sm" id="p-pct">0%</div></div>
       </div>
     </div>
@@ -1150,13 +1156,13 @@ async function processScreenshots(files){
   updateStatus();
 
   const prompt = `You are analyzing a brokerage app screenshot (Robinhood, Fidelity, Stash, Acorns, Webull, Schwab, or similar).
-Extract ALL stock/ETF holdings visible. Include fractional shares.
+Extract ALL stock/ETF holdings visible.
 Return ONLY a valid JSON array — no explanation, no markdown fences. Each item must have:
 - "ticker": uppercase stock symbol (e.g. "AAPL", "VOO")
-- "shares": number of shares owned (decimal ok, e.g. 2.5384)
-- "avgCost": average cost per share (use current market price if avg cost not shown)
-Example: [{"ticker":"AAPL","shares":5,"avgCost":172.50},{"ticker":"VOO","shares":1.5,"avgCost":420.00}]
-If no holdings are visible, return: []`;
+- "shares": EXACT number of shares — preserve all decimal digits shown (e.g. 51.94, 22.65, 2.5384). Do NOT round.
+Example: [{"ticker":"AAPL","shares":51.94},{"ticker":"TSLA","shares":22.65},{"ticker":"VOO","shares":1.5384}]
+If no holdings are visible, return: []
+CRITICAL: Read share counts carefully and keep all decimals. Do not guess or omit any positions.`;
 
   const results = await Promise.all(Array.from(files).map(async file => {
     try {
@@ -1194,6 +1200,16 @@ If no holdings are visible, return: []`;
     document.getElementById('import-status').textContent = msg;
     return;
   }
+
+  // Fetch live price for each ticker — use as avgCost (don't rely on screenshot prices)
+  document.getElementById('import-status').innerHTML =
+    `<div class="flex items-center gap-2"><span class="spin"></span> Fetching today's prices for ${holdings.length} stock${holdings.length>1?'s':''}…</div>`;
+  await Promise.all(holdings.map(async h => {
+    const q = await fetchQuote(h.ticker).catch(()=>null);
+    if(q){ quotes[h.ticker] = q; h.avgCost = q.price; h.name = q.name; }
+    else { h.avgCost = 0; }
+  }));
+
   showImportConfirm(holdings, errors);
 }
 
@@ -1330,18 +1346,20 @@ async function addPosition(){
 
 function removePosition(ticker){ delete portfolio[ticker]; savePortfolio(); renderPortfolio(); toast('Removed '+ticker); }
 
+let _portfolioRefreshing = false;
 function renderPortfolio(){
   const entries = Object.entries(portfolio);
   const hasPositions = entries.length > 0;
   document.getElementById('p-empty').style.display = hasPositions?'none':'';
   document.getElementById('p-analyze-card').style.display = hasPositions?'':'none';
 
-  let totalValue=0, totalCost=0;
+  let totalValue=0, totalCost=0, todayGain=0, todayKnown=false;
   const rows = entries.map(([t,pos])=>{
     const q=quotes[t], price=q?q.price:pos.avgCost;
     const value=pos.shares*price, cost=pos.shares*pos.avgCost;
     const gain=value-cost, gainPct=cost?(gain/cost*100):0;
     totalValue+=value; totalCost+=cost;
+    if(q && q.change!=null){ todayGain+=pos.shares*q.change; todayKnown=true; }
     return {t,pos,price,value,cost,gain,gainPct,q};
   }).sort((a,b)=>b.value-a.value);
 
@@ -1350,29 +1368,64 @@ function renderPortfolio(){
   document.getElementById('p-cost').textContent=fmt(totalCost);
   const gainEl=document.getElementById('p-gain'); gainEl.textContent=(totalGain>=0?'+':'')+fmt(totalGain); gainEl.className='font-bold text-sm '+(totalGain>=0?'gain':'loss');
   const pctEl=document.getElementById('p-pct'); pctEl.textContent=fmtN(totalPct); pctEl.className='font-bold text-sm '+(totalGain>=0?'gain':'loss');
-  const badge=document.getElementById('p-badge'); badge.textContent=fmtN(totalPct); badge.className='pill '+(totalGain>=0?'pill-g':'pill-r');
 
-  document.getElementById('p-holdings').innerHTML = rows.map(r=>`
-    <div class="card p-4">
+  // Today's return (Robinhood-style)
+  const todayEl=document.getElementById('p-today-gain');
+  const todayLabelEl=document.getElementById('p-today-label');
+  if(todayKnown){
+    const prevValue=totalValue-todayGain;
+    const todayPct=prevValue>0?(todayGain/prevValue*100):0;
+    todayEl.textContent=`${todayGain>=0?'+':''}${fmt(todayGain)} (${todayPct>=0?'+':''}${todayPct.toFixed(2)}%)`;
+    todayEl.className=`font-semibold text-sm ${todayGain>=0?'gain':'loss'}`;
+    todayLabelEl.style.display='';
+  } else {
+    todayEl.textContent='–'; todayEl.className='font-semibold text-sm text-gray-400';
+    todayLabelEl.style.display='none';
+  }
+
+  document.getElementById('p-holdings').innerHTML = rows.map(r=>{
+    const dailyVal = r.q&&r.q.change!=null ? r.pos.shares*r.q.change : null;
+    const dailyPct = r.q ? r.q.changePct : null;
+    const dailyHtml = dailyVal!=null
+      ? `<div class="text-xs font-semibold ${dailyVal>=0?'gain':'loss'}">${dailyVal>=0?'+':''}${fmt(dailyVal)} today (${dailyPct>=0?'+':''}${dailyPct.toFixed(2)}%)</div>`
+      : '';
+    return `<div class="card p-4">
       <div class="flex items-start justify-between mb-2">
         <div>
-          <div class="font-bold text-gray-900">${r.t} <span class="text-xs text-gray-400 font-normal">${r.q?r.q.name.split(' ').slice(0,2).join(' '):''}</span></div>
+          <div class="font-bold text-gray-900">${r.t} <span class="text-xs text-gray-400 font-normal">${r.q?r.q.name.split(' ').slice(0,3).join(' '):''}</span></div>
           <div class="text-xs text-gray-400">${r.pos.shares} shares · avg ${fmt(r.pos.avgCost)}</div>
         </div>
         <div class="text-right">
           <div class="font-bold text-gray-900">${fmt(r.value)}</div>
-          <div class="text-sm font-semibold ${r.gain>=0?'gain':'loss'}">${fmtN(r.gainPct)}</div>
+          <div class="text-sm font-semibold ${r.gain>=0?'gain':'loss'}">${r.gain>=0?'+':''}${fmt(r.gain)} (${fmtN(r.gainPct)})</div>
+          ${dailyHtml}
         </div>
       </div>
       <div class="flex justify-between text-xs border-t border-gray-50 pt-2">
-        <span class="text-gray-500">Price: <strong class="text-gray-800">${fmt(r.price)}</strong></span>
-        <span class="${r.gain>=0?'gain':'loss'} font-semibold">${r.gain>=0?'+':''}${fmt(r.gain)}</span>
+        <span class="text-gray-500">Price: <strong class="text-gray-800">${fmt(r.price)}</strong>${r.q?` <span class="${r.q.changePct>=0?'gain':'loss'}">${r.q.changePct>=0?'▲':'▼'}${Math.abs(r.q.changePct).toFixed(2)}%</span>`:''}</span>
         <button class="text-red-400 font-semibold" onclick="removePosition('${r.t}')">Remove</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
-  // Refresh prices in background
-  if(entries.length) Promise.all(entries.map(([t])=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;}))).then(()=>renderPortfolio());
+  // Load missing quotes once (no infinite loop)
+  const missing = entries.filter(([t])=>!quotes[t]);
+  if(missing.length && !_portfolioRefreshing){
+    _portfolioRefreshing = true;
+    Promise.all(missing.map(([t])=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;}))).then(()=>{ _portfolioRefreshing=false; renderPortfolio(); });
+  }
+}
+
+async function refreshPortfolio(){
+  const btn = document.getElementById('p-refresh-btn');
+  if(btn) btn.innerHTML = '<span class="spin" style="display:inline-block;width:14px;height:14px;border-width:2px"></span>';
+  const entries = Object.entries(portfolio);
+  if(entries.length){
+    await Promise.all(entries.map(([t])=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;})));
+    renderPortfolio();
+    toast('Prices updated!');
+  }
+  if(btn) btn.innerHTML = '&#8635; Refresh';
 }
 
 async function analyzePortfolio(){

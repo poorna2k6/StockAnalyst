@@ -428,7 +428,7 @@
       </div>
       <div>
         <label class="text-xs font-semibold text-gray-500 block mb-1">Risk tolerance</label>
-        <select id="earn-time">
+        <select id="earn-risk">
           <option value="low">Low — preserve capital, steady income</option>
           <option value="medium">Medium — balanced growth and income</option>
           <option value="high">High — maximize gains, accept volatility</option>
@@ -436,7 +436,7 @@
       </div>
       <div>
         <label class="text-xs font-semibold text-gray-500 block mb-1">Approx. cash available to invest (optional)</label>
-        <input id="earn-skills" type="text" placeholder="e.g. $500, $2000, $10,000…" inputmode="decimal" />
+        <input id="earn-capital" type="text" placeholder="e.g. $500, $2000, $10,000…" inputmode="decimal" />
       </div>
       <button class="btn btn-primary" onclick="getIncomeIdeas()">Get Stock Ideas</button>
     </div>
@@ -568,6 +568,7 @@ const UNIVERSE = {
 // ══════════════════════════════════════════════════════
 // UTILITIES
 // ══════════════════════════════════════════════════════
+function esc(s){ const d=document.createElement('div'); d.textContent=s??''; return d.innerHTML; }
 function fmt(n, dec=2){ return n==null?'–':'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec}); }
 function fmtN(n, dec=2){ return n==null?'–':(n>=0?'+':'')+n.toFixed(dec)+'%'; }
 function fmtB(n){ if(!n)return'–'; if(n>=1e12) return '$'+(n/1e12).toFixed(2)+'T'; if(n>=1e9) return '$'+(n/1e9).toFixed(2)+'B'; if(n>=1e6) return '$'+(n/1e6).toFixed(2)+'M'; return '$'+n.toLocaleString(); }
@@ -673,6 +674,10 @@ function switchTab(name, btn){
     if(Date.now()-_portfolioLastFetch > STALE_MS && Object.keys(portfolio).length) refreshPortfolio();
   }
   if(name==='brief' && Date.now()-_briefLastFetch > STALE_MS) refreshBrief();
+}
+function goToTab(name){
+  const btn = Array.from(document.querySelectorAll('.tab-btn')).find(b=>b.getAttribute('onclick')?.includes(`'${name}'`));
+  if(btn) switchTab(name, btn);
 }
 
 // ══════════════════════════════════════════════════════
@@ -862,9 +867,9 @@ async function loadBrief(){
     return `<div class="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0 cursor-pointer active:bg-gray-50 rounded-lg px-1 -mx-1" onclick="quickAsk('Give me a full analysis of ${t} with a buy/hold/avoid verdict and entry price target')">
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-1.5 flex-wrap">
-          <span class="font-bold text-gray-900 text-sm">${t}</span>
-          ${signal?`<span class="pill ${signal.cls}" style="font-size:9px;padding:1px 6px">${signal.label}</span>`:''}
-          <span class="text-xs text-gray-400 truncate">${q.name.split(' ').slice(0,3).join(' ')}</span>
+          <span class="font-bold text-gray-900 text-sm">${esc(t)}</span>
+          ${signal?`<span class="pill ${signal.cls}" style="font-size:9px;padding:1px 6px">${esc(signal.label)}</span>`:''}
+          <span class="text-xs text-gray-400 truncate">${esc(q.name.split(' ').slice(0,3).join(' '))}</span>
         </div>
         ${barPct!==null?`<div class="flex items-center gap-1.5 mt-1"><div class="range-bar flex-1" style="max-width:80px"><div class="range-fill ${barPct>65?'bg-green-400':barPct<35?'bg-red-400':'bg-yellow-400'}" style="width:${barPct}%"></div></div><span class="text-xs text-gray-400">${barPct.toFixed(0)}% of 52W</span></div>`:''}
       </div>
@@ -914,8 +919,6 @@ Write a sharp, intelligent 3-sentence market briefing for a beginner investor. C
 
 async function refreshBrief(){
   await loadBrief();
-  _briefLastFetch = Date.now();
-  _updateLastUpdated();
   toast('Brief refreshed');
 }
 
@@ -1041,7 +1044,7 @@ function renderRuleBasedPlan(budget, risk, horizon, validQuotes){
       const stop = x.q.price * stopAdj;
       return `<div class="border border-gray-100 rounded-xl p-3">
         <div class="flex items-center justify-between mb-1">
-          <span class="font-bold text-gray-900">${x.ticker} <span class="text-gray-400 font-normal text-sm">${x.q.name.split(' ').slice(0,2).join(' ')}</span></span>
+          <span class="font-bold text-gray-900">${esc(x.ticker)} <span class="text-gray-400 font-normal text-sm">${esc(x.q.name.split(' ').slice(0,2).join(' '))}</span></span>
           <span class="pill pill-b">${weights[i]}% = ${fmt(amt,0)}</span>
         </div>
         <div class="grid grid-cols-3 gap-2 text-xs mt-2">
@@ -1068,7 +1071,7 @@ function extractTickers(text){
 }
 
 function quickAsk(msg){
-  switchTab('analyst', document.querySelectorAll('.tab-btn')[2]);
+  goToTab('analyst');
   document.getElementById('chat-input').value = msg;
   setTimeout(handleChat, 100);
 }
@@ -1137,8 +1140,8 @@ async function handleChat(){
       const qs = tickers.map(t=>quotes[t]).filter(Boolean);
       loadEl.innerHTML = `<div class="font-semibold text-gray-800 mb-2">Market Data for ${tickers.join(', ')}</div>` +
         qs.map(q=>`<div class="bg-gray-50 rounded-xl p-3 mb-2">
-          <div class="flex justify-between"><span class="font-bold">${q.ticker}</span><span class="font-bold">${fmt(q.price)}</span></div>
-          <div class="flex justify-between text-xs text-gray-500 mt-1"><span>${q.name.substring(0,30)}</span><span class="${q.change>=0?'gain':'loss'}">${fmtN(q.changePct)}</span></div>
+          <div class="flex justify-between"><span class="font-bold">${esc(q.ticker)}</span><span class="font-bold">${fmt(q.price)}</span></div>
+          <div class="flex justify-between text-xs text-gray-500 mt-1"><span>${esc(q.name.substring(0,30))}</span><span class="${q.change>=0?'gain':'loss'}">${fmtN(q.changePct)}</span></div>
           ${q.hi52?`<div class="text-xs text-gray-400 mt-1">52W: ${fmt(q.lo52)} – ${fmt(q.hi52)}</div>`:''}
         </div>`).join('') +
         `<div class="text-xs text-gray-400 mt-2 p-2 bg-blue-50 rounded-lg">Add a Claude or Gemini API key in Settings for AI analysis with buy/sell recommendations.</div>`;
@@ -1344,6 +1347,10 @@ function fileToBase64(file){
 }
 
 let pendingImport = [];
+function removeImportHolding(ticker){
+  pendingImport = pendingImport.filter(h=>String(h.ticker).toUpperCase()!==ticker);
+  showImportConfirm(pendingImport);
+}
 function showImportConfirm(holdings, errors=[]){
   pendingImport = holdings;
   const newCount = holdings.filter(h=>!portfolio[String(h.ticker).toUpperCase()]).length;
@@ -1365,7 +1372,7 @@ function showImportConfirm(holdings, errors=[]){
         <div class="font-bold text-gray-900" style="display:flex;align-items:center">${t}${badge}</div>
         <div class="text-xs text-gray-500">${parseFloat(h.shares).toLocaleString(undefined,{maximumFractionDigits:4})} shares &middot; avg $${parseFloat(h.avgCost).toFixed(2)}</div>
       </div>
-      <button onclick="pendingImport.splice(${i},1);showImportConfirm(pendingImport)" class="text-red-400 text-sm font-semibold">Remove</button>
+      <button onclick="removeImportHolding('${t}')" class="text-red-400 text-sm font-semibold">Remove</button>
     </div>`;
   }).join('');
   document.getElementById('import-actions').style.display = holdings.length ? '' : 'none';
@@ -1389,10 +1396,11 @@ async function confirmImport(){
     }
   }
   savePortfolio();
-  await Promise.all(Object.keys(portfolio).map(t=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;})));
+  const missingTickers = Object.keys(portfolio).filter(t=>!quotes[t]);
+  if(missingTickers.length) await Promise.all(missingTickers.map(t=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;})));
   renderPortfolio();
   closeImport();
-  switchTab('portfolio', document.querySelectorAll('.tab-btn')[3]);
+  goToTab('portfolio');
   const parts = [];
   if(added) parts.push(`${added} added`);
   if(updated) parts.push(`${updated} updated`);
@@ -1475,7 +1483,7 @@ function renderPortfolio(){
     return `<div class="card p-4">
       <div class="flex items-start justify-between mb-2">
         <div>
-          <div class="font-bold text-gray-900">${r.t} <span class="text-xs text-gray-400 font-normal">${r.q?r.q.name.split(' ').slice(0,3).join(' '):''}</span></div>
+          <div class="font-bold text-gray-900">${esc(r.t)} <span class="text-xs text-gray-400 font-normal">${r.q?esc(r.q.name.split(' ').slice(0,3).join(' ')):''}</span></div>
           <div class="text-xs text-gray-400">${r.pos.shares} shares · avg ${fmt(r.pos.avgCost)}</div>
         </div>
         <div class="text-right">
@@ -1495,7 +1503,7 @@ function renderPortfolio(){
   const missing = entries.filter(([t])=>!quotes[t]);
   if(missing.length && !_portfolioRefreshing){
     _portfolioRefreshing = true;
-    Promise.all(missing.map(([t])=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;}))).then(()=>{ _portfolioRefreshing=false; renderPortfolio(); });
+    Promise.all(missing.map(([t])=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;}))).then(()=>{ _portfolioRefreshing=false; renderPortfolio(); }).catch(()=>{ _portfolioRefreshing=false; });
   }
 }
 
@@ -1545,8 +1553,8 @@ async function analyzePortfolio(){
 async function getIncomeIdeas(){
   if(!getActiveAI()){ toast('Add a Claude or Gemini API key in Settings first'); openSettings(); return; }
   const style   = document.getElementById('earn-goal').value;
-  const risk    = document.getElementById('earn-time').value;
-  const capital = document.getElementById('earn-skills').value.trim();
+  const risk    = document.getElementById('earn-risk').value;
+  const capital = document.getElementById('earn-capital').value.trim();
   const el = document.getElementById('earn-result');
   document.getElementById('earn-tips').style.display = 'none';
   el.innerHTML = '<div class="card p-4"><div class="flex items-center gap-2 text-sm text-gray-400"><span class="spin"></span> Finding stock opportunities for you…</div></div>';

@@ -281,7 +281,7 @@
           <label class="text-xs font-semibold text-gray-500 mb-1 block">Your Investment Budget (USD)</label>
           <div class="relative">
             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
-            <input id="invest-budget" type="number" placeholder="e.g. 1000" min="100" style="padding-left:28px" />
+            <input id="invest-budget" type="number" placeholder="e.g. 1000" min="50" style="padding-left:28px" />
           </div>
         </div>
         <div>
@@ -409,8 +409,8 @@
   </div>
 </div>
 
-<!-- EARN TAB -->
-<div id="tab-earn" class="tab-pane space-y-4">
+  <!-- EARN TAB -->
+  <div id="tab-earn" class="tab-pane space-y-4">
 
   <div class="card p-4">
     <div class="section-label">Stock Trading Income</div>
@@ -468,6 +468,7 @@
     </div>
   </div>
 
+</div>
 </div>
 
 <!-- Import from Screenshot Modal -->
@@ -570,7 +571,7 @@ const UNIVERSE = {
 // ══════════════════════════════════════════════════════
 function esc(s){ const d=document.createElement('div'); d.textContent=s??''; return d.innerHTML; }
 function fmt(n, dec=2){ return n==null?'–':'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec}); }
-function fmtN(n, dec=2){ return n==null?'–':(n>=0?'+':'')+n.toFixed(dec)+'%'; }
+function fmtN(n, dec=2){ return (n==null||isNaN(n))?'–':(n>=0?'+':'')+n.toFixed(dec)+'%'; }
 function fmtB(n){ if(!n)return'–'; if(n>=1e12) return '$'+(n/1e12).toFixed(2)+'T'; if(n>=1e9) return '$'+(n/1e9).toFixed(2)+'B'; if(n>=1e6) return '$'+(n/1e6).toFixed(2)+'M'; return '$'+n.toLocaleString(); }
 function timeAgo(ts){ const s=Math.floor((Date.now()/1000)-ts); if(s<60) return s+'s ago'; if(s<3600) return Math.floor(s/60)+'m ago'; if(s<86400) return Math.floor(s/3600)+'h ago'; return Math.floor(s/86400)+'d ago'; }
 
@@ -798,9 +799,12 @@ async function loadBrief(){
   const spy = idxQuotes[0], qqq = idxQuotes[1], dia = idxQuotes[2], iwm = idxQuotes[3];
   const pulseEl = document.getElementById('market-pulse');
   const now = new Date();
-  const hour = now.getUTCHours(), min = now.getUTCMinutes();
-  const isMarketHours = (hour > 13 || (hour === 13 && min >= 30)) && hour < 20;
-  const isPreMarket = hour >= 9 && hour < 13;
+  // Use America/New_York so DST is handled automatically
+  const etNow = new Date(now.toLocaleString('en-US', {timeZone:'America/New_York'}));
+  const etHour = etNow.getHours(), etMin = etNow.getMinutes(), etDay = etNow.getDay();
+  const isWeekend = etDay === 0 || etDay === 6;
+  const isMarketHours = !isWeekend && (etHour > 9 || (etHour === 9 && etMin >= 30)) && etHour < 16;
+  const isPreMarket = !isWeekend && etHour >= 4 && (etHour < 9 || (etHour === 9 && etMin < 30));
 
   let mood='', moodClass='', moodIcon='', insights=[], signals=[];
   if(spy){
@@ -838,14 +842,14 @@ async function loadBrief(){
       else if(pos<20) signals.push({text:`S&P 500 is near 52-week lows — potential value opportunity but wait for reversal signal`,color:'border-red-200'});
     }
   }
-  if(!isMarketHours) signals.push({text:isPreMarket?'Pre-market session — prices may shift significantly at 9:30 AM ET open':'US market closed — prices shown are last close. Market opens Mon–Fri 9:30 AM ET',color:'border-gray-200'});
+  if(!isMarketHours) signals.push({text:isWeekend?'Weekend — US markets are closed. Trading resumes Monday 9:30 AM ET':isPreMarket?'Pre-market session — prices may shift significantly at 9:30 AM ET open':'US market closed — prices shown are last close. Market opens Mon–Fri 9:30 AM ET',color:'border-gray-200'});
 
   pulseEl.innerHTML = `
     <div class="flex items-center gap-2 mb-3">
       <span class="text-lg">${moodIcon}</span>
       <div>
         <div class="flex items-center gap-2"><span class="font-bold text-gray-800 text-sm">${mood||'–'}</span><span class="pill ${moodClass} text-xs">${spy?fmtN(spy.changePct):'–'}</span></div>
-        <div class="text-xs text-gray-400">${isMarketHours?'Live Market':'Market Closed'} · S&amp;P 500 benchmark</div>
+        <div class="text-xs text-gray-400">${isMarketHours?'Live Market':isWeekend?'Weekend — Market Closed':'Market Closed'} · S&amp;P 500 benchmark</div>
       </div>
     </div>
     <div class="grid grid-cols-4 gap-1.5 mb-3">
@@ -906,14 +910,18 @@ async function loadAIBrief(idxQuotes, pickQuotes, pickTickers){
     const idxSummary = INDEXES.map((idx,i)=>{ const q=idxQuotes[i]; return q?`${idx.ticker}(${idx.name.split('(')[0].trim()}): ${fmt(q.price)} ${fmtN(q.changePct)}`:''; }).filter(Boolean).join(' | ');
     const topMoved = pickTickers.map((t,i)=>{ const q=pickQuotes[i]; return q?`${t} ${fmtN(q.changePct)}`:null; }).filter(Boolean).slice(0,6).join(', ');
     const now = new Date();
-    const prompt = `Today is ${now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}.
+    const etTime = new Date(now.toLocaleString('en-US',{timeZone:'America/New_York'}));
+    const etHour = etTime.getHours();
+    const timeOfDay = etHour < 12 ? 'morning' : etHour < 17 ? 'afternoon' : 'evening';
+    const timeStr = etTime.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
+    const prompt = `Today is ${now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}. Current time: ${timeStr} ET (${timeOfDay}).
 
 Market indexes: ${idxSummary}
 Top movers: ${topMoved}
 
-Write a sharp, intelligent 3-sentence market briefing for a beginner investor. Cover: (1) overall market mood and what's driving it, (2) which sectors or themes to watch today, (3) one tactical insight — what a smart investor should do or watch for today. Plain English, no jargon, confident and direct tone.`;
+Write a sharp, intelligent 3-sentence market briefing for a beginner investor. Cover: (1) overall market mood and what's driving it, (2) which sectors or themes to watch today, (3) one tactical insight — what a smart investor should do or watch for today. Plain English, no jargon, confident and direct tone. Do NOT open with a time-based greeting like "Good morning" — start directly with the market analysis.`;
     let text = '';
-    await streamAI('You are a sharp senior market strategist giving a daily briefing. Be direct, insightful, and specific — not generic.', [{role:'user',content:prompt}], 250, chunk=>{ text+=chunk; briefEl.textContent=text; });
+    await streamAI('You are a sharp senior market strategist giving a daily briefing. Be direct, insightful, and specific — not generic. Never start with time-based greetings. Jump straight into market analysis.', [{role:'user',content:prompt}], 250, chunk=>{ text+=chunk; briefEl.textContent=text; });
   } catch(e){ briefEl.textContent = 'AI brief unavailable. Check your API key in Settings.'; }
 }
 
@@ -1076,10 +1084,14 @@ function quickAsk(msg){
   setTimeout(handleChat, 100);
 }
 
+let _chatBusy = false;
 async function handleChat(){
+  if(_chatBusy) return;
   const input = document.getElementById('chat-input');
   const msg = input.value.trim(); if(!msg) return;
   input.value = '';
+  const sendBtn = input.nextElementSibling;
+  _chatBusy = true; input.disabled = true; sendBtn.disabled = true; sendBtn.style.opacity = '0.5';
 
   appendMsg('user', msg);
   const tickers = extractTickers(msg.toUpperCase());
@@ -1149,6 +1161,7 @@ async function handleChat(){
       loadEl.textContent = 'To get AI-powered analysis and recommendations, please add a Claude or Gemini API key in Settings (gear icon at top).';
     }
     scrollChat();
+    _chatBusy = false; input.disabled = false; sendBtn.disabled = false; sendBtn.style.opacity = '1';
     return;
   }
 
@@ -1195,6 +1208,8 @@ STYLE RULES:
   } catch(err){
     loadEl.className='chat-msg-ai';
     loadEl.textContent=`Error: ${err.message}. Please check your API key in Settings.`;
+  } finally {
+    _chatBusy = false; input.disabled = false; sendBtn.disabled = false; sendBtn.style.opacity = '1';
   }
   scrollChat();
 }
@@ -1353,6 +1368,12 @@ function removeImportHolding(ticker){
 }
 function showImportConfirm(holdings, errors=[]){
   pendingImport = holdings;
+  if(!holdings.length){
+    document.getElementById('import-status').textContent = 'No holdings to import. Close and re-upload screenshots.';
+    document.getElementById('import-holdings').innerHTML = '';
+    document.getElementById('import-actions').style.display = 'none';
+    return;
+  }
   const newCount = holdings.filter(h=>!portfolio[String(h.ticker).toUpperCase()]).length;
   const updateCount = holdings.length - newCount;
   let statusParts = [`Found ${holdings.length} holding${holdings.length>1?'s':''}`];
@@ -1370,7 +1391,7 @@ function showImportConfirm(holdings, errors=[]){
     return `<div class="bg-gray-50 rounded-xl p-3 flex items-center justify-between">
       <div>
         <div class="font-bold text-gray-900" style="display:flex;align-items:center">${t}${badge}</div>
-        <div class="text-xs text-gray-500">${parseFloat(h.shares).toLocaleString(undefined,{maximumFractionDigits:4})} shares &middot; avg $${parseFloat(h.avgCost).toFixed(2)}</div>
+        <div class="text-xs text-gray-500">${parseFloat(h.shares).toLocaleString(undefined,{maximumFractionDigits:4})} shares &middot; avg ${h.avgCost>0?'$'+parseFloat(h.avgCost).toFixed(2):'price unavailable'}</div>
       </div>
       <button onclick="removeImportHolding('${t}')" class="text-red-400 text-sm font-semibold">Remove</button>
     </div>`;
@@ -1387,8 +1408,8 @@ async function confirmImport(){
     const avgCost = parseFloat(h.avgCost) || 0;
     if(!ticker||isNaN(shares)||shares<=0) continue;
     if(portfolio[ticker]){
-      const e=portfolio[ticker]; const tot=e.shares+shares;
-      portfolio[ticker]={shares:tot,avgCost:(e.shares*e.avgCost+shares*avgCost)/tot};
+      // Screenshot shows current total shares — replace, keep existing avg cost since that's what was paid
+      portfolio[ticker]={shares, avgCost: avgCost || portfolio[ticker].avgCost};
       updated++;
     } else {
       portfolio[ticker]={shares,avgCost};
@@ -1457,7 +1478,7 @@ function renderPortfolio(){
   const totalGain=totalValue-totalCost, totalPct=totalCost?(totalGain/totalCost*100):0;
   document.getElementById('p-total').textContent=fmt(totalValue);
   document.getElementById('p-cost').textContent=fmt(totalCost);
-  const gainEl=document.getElementById('p-gain'); gainEl.textContent=(totalGain>=0?'+':'')+fmt(totalGain); gainEl.className='font-bold text-sm '+(totalGain>=0?'gain':'loss');
+  const gainEl=document.getElementById('p-gain'); gainEl.textContent=(totalGain>=0?'+':'-')+fmt(totalGain); gainEl.className='font-bold text-sm '+(totalGain>=0?'gain':'loss');
   const pctEl=document.getElementById('p-pct'); pctEl.textContent=fmtN(totalPct); pctEl.className='font-bold text-sm '+(totalGain>=0?'gain':'loss');
 
   // Today's return (Robinhood-style)
@@ -1466,7 +1487,7 @@ function renderPortfolio(){
   if(todayKnown){
     const prevValue=totalValue-todayGain;
     const todayPct=prevValue>0?(todayGain/prevValue*100):0;
-    todayEl.textContent=`${todayGain>=0?'+':''}${fmt(todayGain)} (${todayPct>=0?'+':''}${todayPct.toFixed(2)}%)`;
+    todayEl.textContent=`${todayGain>=0?'+':'-'}${fmt(todayGain)} (${todayPct>=0?'+':'-'}${Math.abs(todayPct).toFixed(2)}%)`;
     todayEl.className=`font-semibold text-sm ${todayGain>=0?'gain':'loss'}`;
     todayLabelEl.style.display='';
   } else {
@@ -1484,11 +1505,11 @@ function renderPortfolio(){
       <div class="flex items-start justify-between mb-2">
         <div>
           <div class="font-bold text-gray-900">${esc(r.t)} <span class="text-xs text-gray-400 font-normal">${r.q?esc(r.q.name.split(' ').slice(0,3).join(' ')):''}</span></div>
-          <div class="text-xs text-gray-400">${r.pos.shares} shares · avg ${fmt(r.pos.avgCost)}</div>
+          <div class="text-xs text-gray-400">${parseFloat(r.pos.shares).toLocaleString(undefined,{maximumFractionDigits:4})} shares · avg ${fmt(r.pos.avgCost)}</div>
         </div>
         <div class="text-right">
           <div class="font-bold text-gray-900">${fmt(r.value)}</div>
-          <div class="text-sm font-semibold ${r.gain>=0?'gain':'loss'}">${r.gain>=0?'+':''}${fmt(r.gain)} (${fmtN(r.gainPct)})</div>
+          <div class="text-sm font-semibold ${r.gain>=0?'gain':'loss'}">${r.gain>=0?'+':'-'}${fmt(r.gain)} (${fmtN(r.gainPct)})</div>
           ${dailyHtml}
         </div>
       </div>

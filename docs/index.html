@@ -1185,10 +1185,9 @@ CRITICAL: Read share counts carefully and keep all decimals. Do not guess or omi
     const t = String(h.ticker||'').trim().toUpperCase();
     if(!t) continue;
     const shares = parseFloat(h.shares);
-    const avgCost = parseFloat(h.avgCost);
-    if(isNaN(shares)||shares<=0||isNaN(avgCost)||avgCost<=0) continue;
+    if(isNaN(shares)||shares<=0) continue;
     if(!merged[t] || shares > merged[t].shares){
-      merged[t] = {ticker:t, shares, avgCost};
+      merged[t] = {ticker:t, shares};
     }
   }
 
@@ -1294,8 +1293,8 @@ async function confirmImport(){
   for(const h of pendingImport){
     const ticker = String(h.ticker).trim().toUpperCase();
     const shares = parseFloat(h.shares);
-    const avgCost = parseFloat(h.avgCost);
-    if(!ticker||isNaN(shares)||shares<=0||isNaN(avgCost)||avgCost<=0) continue;
+    const avgCost = parseFloat(h.avgCost) || 0;
+    if(!ticker||isNaN(shares)||shares<=0) continue;
     if(portfolio[ticker]){
       const e=portfolio[ticker]; const tot=e.shares+shares;
       portfolio[ticker]={shares:tot,avgCost:(e.shares*e.avgCost+shares*avgCost)/tot};

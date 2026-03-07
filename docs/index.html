@@ -258,6 +258,14 @@
   ══════════════════════════════════════ -->
   <div id="tab-brief" class="tab-pane active space-y-4">
 
+    <!-- Quick Stock Search -->
+    <div class="card p-3">
+      <div class="flex gap-2">
+        <input id="brief-search" type="text" placeholder="Search any stock: AAPL, TSLA, NVDA…" autocapitalize="characters" style="flex:1;border-radius:20px;padding:9px 14px;font-size:14px" />
+        <button onclick="briefSearch()" class="btn btn-primary btn-sm" style="width:auto;border-radius:20px;padding:9px 18px;flex-shrink:0">→</button>
+      </div>
+    </div>
+
     <!-- AI Market Intelligence Banner -->
     <div class="rounded-2xl p-4 text-white" style="background:linear-gradient(135deg,#1d4ed8 0%,#6d28d9 60%,#be185d 100%)">
       <div class="flex items-center gap-2 mb-1">
@@ -436,6 +444,9 @@
       </div>
     </div>
 
+    <div id="p-allocation"></div>
+    <div id="p-sector"></div>
+
     <div id="p-holdings" class="space-y-2"></div>
 
     <div id="p-empty" class="card p-8 text-center">
@@ -580,6 +591,28 @@
     </div>
     <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
     <div class="text-xs text-gray-400 text-center pt-2">Educational tool only. Not financial advice. Always do your own research.</div>
+
+    <!-- Feature Highlights -->
+    <div class="border-t border-gray-100 pt-4">
+      <div class="section-label">What's Included</div>
+      <div class="grid grid-cols-2 gap-1.5 text-xs text-gray-600">
+        <div class="flex items-center gap-1.5 bg-gray-50 rounded-lg p-2">🌙 Dark mode</div>
+        <div class="flex items-center gap-1.5 bg-gray-50 rounded-lg p-2">⭐ Watchlist</div>
+        <div class="flex items-center gap-1.5 bg-gray-50 rounded-lg p-2">⏱ Market countdown</div>
+        <div class="flex items-center gap-1.5 bg-gray-50 rounded-lg p-2">⬇ CSV export</div>
+        <div class="flex items-center gap-1.5 bg-gray-50 rounded-lg p-2">📋 Copy analysis</div>
+        <div class="flex items-center gap-1.5 bg-gray-50 rounded-lg p-2">🔔 Price alerts</div>
+        <div class="flex items-center gap-1.5 bg-gray-50 rounded-lg p-2">📊 Allocation chart</div>
+        <div class="flex items-center gap-1.5 bg-gray-50 rounded-lg p-2">🏭 Sector breakdown</div>
+        <div class="flex items-center gap-1.5 bg-gray-50 rounded-lg p-2">🔍 Quick search</div>
+        <div class="flex items-center gap-1.5 bg-gray-50 rounded-lg p-2">📷 Screenshot import</div>
+        <div class="flex items-center gap-1.5 bg-gray-50 rounded-lg p-2">🤖 Claude + Gemini AI</div>
+        <div class="flex items-center gap-1.5 bg-gray-50 rounded-lg p-2">📱 PWA installable</div>
+      </div>
+    </div>
+
+    <!-- Build version — helps confirm latest code is deployed -->
+    <div class="text-center text-xs text-gray-300 pb-1" id="settings-build"></div>
   </div>
 </div>
 
@@ -605,7 +638,28 @@ let portfolio = JSON.parse(localStorage.getItem('msa_portfolio') || '{}');
 let quotes = {};
 let chatHistory = [];
 let watchlist = JSON.parse(localStorage.getItem('msa_watchlist') || '[]');
+let alerts   = JSON.parse(localStorage.getItem('msa_alerts')    || '{}');
 let _darkMode = localStorage.getItem('msa_dark') === '1';
+
+const BUILD = 'v2.3 · 2026-03-07';
+
+const SECTOR_MAP = {
+  AAPL:'Tech',MSFT:'Tech',NVDA:'Tech',AMD:'Tech',INTC:'Tech',META:'Tech',
+  GOOGL:'Tech',GOOG:'Tech',AMZN:'Tech',ORCL:'Tech',CRM:'Tech',ADBE:'Tech',
+  TSLA:'Auto/EV',RIVN:'Auto/EV',LCID:'Auto/EV',F:'Auto/EV',GM:'Auto/EV',
+  NFLX:'Media',DIS:'Media',ROKU:'Media',SNAP:'Media',SPOT:'Media',
+  JPM:'Finance',BAC:'Finance',GS:'Finance',MS:'Finance',V:'Finance',
+  MA:'Finance',WFC:'Finance',C:'Finance',AXP:'Finance',BRK:'Finance',
+  UNH:'Healthcare',JNJ:'Healthcare',PFE:'Healthcare',MRNA:'Healthcare',
+  ABBV:'Healthcare',LLY:'Healthcare',BMY:'Healthcare',AMGN:'Healthcare',
+  XOM:'Energy',CVX:'Energy',COP:'Energy',SLB:'Energy',OXY:'Energy',
+  HD:'Consumer',WMT:'Consumer',TGT:'Consumer',COST:'Consumer',
+  NKE:'Consumer',PG:'Consumer',KO:'Consumer',PEP:'Consumer',MCD:'Consumer',
+  BA:'Industrial',CAT:'Industrial',GE:'Industrial',HON:'Industrial',
+  SPY:'ETF',QQQ:'ETF',VTI:'ETF',VOO:'ETF',IWM:'ETF',
+  SCHD:'ETF',VYM:'ETF',JEPI:'ETF',SGOV:'ETF',BIL:'ETF',
+  PLTR:'Tech',ARM:'Tech',MSTR:'Crypto',COIN:'Crypto',
+};
 
 const TIPS = {
   pe: { title: 'P/E Ratio (Price-to-Earnings)', body: 'How much you pay for $1 of company earnings. P/E of 20 means you pay $20 for every $1 the company earns. Lower can mean cheaper, but growing companies often have higher P/E.' },
@@ -656,6 +710,8 @@ function openSettings(){
   document.getElementById('settings-gemini-key').value = geminiKey;
   document.getElementById('settings-ai-pref').value = aiPref;
   document.getElementById('settings-name').value = userName;
+  const bi = document.getElementById('settings-build');
+  if(bi) bi.textContent = 'Build ' + BUILD;
   document.getElementById('settings-modal').classList.add('open');
 }
 function closeSettings(){ document.getElementById('settings-modal').classList.remove('open'); }
@@ -962,6 +1018,7 @@ async function loadBrief(){
 
   document.getElementById('brief-time').textContent = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
   updateMarketCountdown();
+  checkAllAlerts();
 
   // Fire AI brief (non-blocking)
   loadAIBrief(idxQuotes, pickQuotes, pickTickers);
@@ -1328,6 +1385,7 @@ function addCopyBtn(msgEl){
 function scrollChat(){ const el=document.getElementById('chat-messages'); el.scrollTop=el.scrollHeight; window.scrollTo(0,document.body.scrollHeight); }
 
 document.getElementById('chat-input').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); handleChat(); } });
+document.getElementById('brief-search').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); briefSearch(); } });
 
 // ══════════════════════════════════════════════════════
 // SCREENSHOT IMPORT
@@ -1623,6 +1681,10 @@ function renderPortfolio(){
     </div>`;
   }).join('');
 
+  // Allocation chart + sector breakdown
+  renderAllocationChart(rows, totalValue);
+  renderSectorBreakdown(rows, totalValue);
+
   // Load missing quotes once (no infinite loop)
   const missing = entries.filter(([t])=>!quotes[t]);
   if(missing.length && !_portfolioRefreshing){
@@ -1637,6 +1699,7 @@ async function refreshPortfolio(){
   const entries = Object.entries(portfolio);
   if(entries.length){
     await Promise.all(entries.map(([t])=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;})));
+    checkAllAlerts();
     _portfolioLastFetch = Date.now();
     _updateLastUpdated();
     renderPortfolio();
@@ -1862,8 +1925,11 @@ function renderWatchlist(){
   listEl.innerHTML = watchlist.map(t=>{
     const q = quotes[t];
     if(!q) return `<div class="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0 px-1">
-      <div class="flex items-center gap-2"><span class="spin" style="width:14px;height:14px;border-width:2px"></span><span class="font-bold text-gray-900 text-sm">${esc(t)}</span></div>
-      <button onclick="removeFromWatchlist('${esc(t)}')" style="background:none;border:none;cursor:pointer;color:#f87171;font-size:18px;line-height:1;padding:4px">×</button>
+      <div class="flex items-center gap-2 flex-1"><span class="spin" style="width:14px;height:14px;border-width:2px"></span><span class="font-bold text-gray-900 text-sm">${esc(t)}</span></div>
+      <div style="display:flex;align-items:center;gap:2px">
+        <button onclick="setAlert('${esc(t)}')" title="Set alert" style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px;opacity:${alerts[t]?'1':'0.4'}">${alerts[t]?'🔔':'🔕'}</button>
+        <button onclick="removeFromWatchlist('${esc(t)}')" style="background:none;border:none;cursor:pointer;color:#f87171;font-size:18px;line-height:1;padding:4px">×</button>
+      </div>
     </div>`;
     const barPct = q.hi52&&q.lo52 ? Math.max(0,Math.min(100,(q.price-q.lo52)/(q.hi52-q.lo52)*100)) : null;
     return `<div class="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0 rounded-lg px-1 cursor-pointer" onclick="quickAsk('Give me a full analysis of ${t} with a buy/hold/avoid verdict and entry price target')">
@@ -1878,7 +1944,10 @@ function renderWatchlist(){
         <div class="font-bold text-gray-900 text-sm">${fmt(q.price)}</div>
         <div class="text-xs font-semibold ${q.change>=0?'gain':'loss'}">${fmtN(q.changePct)}</div>
       </div>
-      <button onclick="event.stopPropagation();removeFromWatchlist('${esc(t)}')" style="background:none;border:none;cursor:pointer;color:#f87171;font-size:20px;line-height:1;padding:4px;flex-shrink:0">×</button>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0">
+        <button onclick="event.stopPropagation();setAlert('${esc(t)}')" title="Set price alert" style="background:none;border:none;cursor:pointer;font-size:15px;line-height:1;padding:2px 4px;opacity:${alerts[t]?'1':'0.45'}">${alerts[t]?'🔔':'🔕'}</button>
+        <button onclick="event.stopPropagation();removeFromWatchlist('${esc(t)}')" style="background:none;border:none;cursor:pointer;color:#f87171;font-size:18px;line-height:1;padding:2px 4px">×</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -1900,6 +1969,7 @@ async function refreshWatchlist(){
   if(!watchlist.length) return;
   toast('Refreshing watchlist…');
   await Promise.all(watchlist.map(t=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;})));
+  checkAllAlerts();
   renderWatchlist();
   toast('Watchlist updated!');
 }
@@ -1930,6 +2000,129 @@ function exportPortfolioCSV(){
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
   toast('Portfolio exported as CSV!');
+}
+
+// ══════════════════════════════════════════════════════
+// QUICK SEARCH (Feature 6)
+// ══════════════════════════════════════════════════════
+function briefSearch(){
+  const val = (document.getElementById('brief-search').value||'').trim().toUpperCase();
+  if(!val){ toast('Enter a stock ticker or name'); return; }
+  document.getElementById('brief-search').value = '';
+  quickAsk('Give me a full analysis of '+val+' with a buy/hold/avoid verdict and entry price target');
+}
+
+// ══════════════════════════════════════════════════════
+// PRICE ALERTS (Feature 7)
+// ══════════════════════════════════════════════════════
+function saveAlerts(){ localStorage.setItem('msa_alerts', JSON.stringify(alerts)); }
+
+function setAlert(ticker){
+  const t = ticker.toUpperCase();
+  const cur = quotes[t];
+  const a = alerts[t];
+  const curStr = cur ? ` (current: $${cur.price.toFixed(2)})` : '';
+  const existingStr = a ? ` [active: ${a.above?'above $'+a.above:''}${a.below?'below $'+a.below:''}]` : '';
+  const val = prompt(
+    `Price alert for ${t}${curStr}${existingStr}\n\nType:\n  "above 200"  — alert when price crosses above $200\n  "below 150"  — alert when price drops below $150\n  "clear"      — remove alert`,
+    a ? (a.above ? 'above '+a.above : 'below '+a.below) : ''
+  );
+  if(val === null) return; // cancelled
+  const trimmed = val.trim().toLowerCase();
+  if(trimmed === 'clear' || trimmed === ''){
+    delete alerts[t];
+    saveAlerts();
+    toast(`Alert cleared for ${t}`);
+    if(document.getElementById('tab-watch').classList.contains('active')) renderWatchlist();
+    return;
+  }
+  const m = trimmed.match(/(above|below)\s*\$?\s*(\d+\.?\d*)/);
+  if(!m){ toast('Format: "above 200" or "below 150"'); return; }
+  const dir = m[1], price = parseFloat(m[2]);
+  alerts[t] = { [dir]: price, _triggered: false };
+  saveAlerts();
+  toast(`🔔 Alert set: ${t} ${dir} $${price}`);
+  if(document.getElementById('tab-watch').classList.contains('active')) renderWatchlist();
+}
+
+function checkAlertsForQuote(ticker, price){
+  const a = alerts[ticker];
+  if(!a || a._triggered) return;
+  let hit = false;
+  if(a.above != null && price >= a.above){ toast(`🔔 ${ticker} hit $${price.toFixed(2)} — above your $${a.above} alert!`); hit=true; }
+  else if(a.below != null && price <= a.below){ toast(`🔔 ${ticker} hit $${price.toFixed(2)} — below your $${a.below} alert!`); hit=true; }
+  if(hit){ alerts[ticker]._triggered = true; saveAlerts(); }
+}
+
+function checkAllAlerts(){
+  Object.keys(alerts).forEach(t=>{ if(quotes[t]) checkAlertsForQuote(t, quotes[t].price); });
+}
+
+// ══════════════════════════════════════════════════════
+// PORTFOLIO ALLOCATION CHART (Feature 8)
+// ══════════════════════════════════════════════════════
+const ALLOC_COLORS = ['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#06b6d4','#84cc16','#f97316','#ec4899','#6366f1'];
+
+function renderAllocationChart(rows, totalValue){
+  const el = document.getElementById('p-allocation');
+  if(!el) return;
+  if(rows.length < 2 || totalValue <= 0){ el.innerHTML = ''; return; }
+  const items = rows.slice(0,10).map((r,i)=>{
+    const pct = (r.value/totalValue*100);
+    const color = ALLOC_COLORS[i % ALLOC_COLORS.length];
+    return `<div class="mb-2">
+      <div class="flex justify-between text-xs mb-1">
+        <span class="font-semibold text-gray-700">${esc(r.t)}</span>
+        <span class="text-gray-400">${pct.toFixed(1)}%  ${fmt(r.value)}</span>
+      </div>
+      <div class="range-bar"><div style="width:${pct.toFixed(1)}%;height:100%;background:${color};border-radius:3px;transition:width .6s"></div></div>
+    </div>`;
+  });
+  if(rows.length > 10){
+    const otherVal = rows.slice(10).reduce((s,r)=>s+r.value,0);
+    const otherPct = (otherVal/totalValue*100);
+    items.push(`<div class="mb-2">
+      <div class="flex justify-between text-xs mb-1">
+        <span class="font-semibold text-gray-500">+${rows.length-10} more</span>
+        <span class="text-gray-400">${otherPct.toFixed(1)}%  ${fmt(otherVal)}</span>
+      </div>
+      <div class="range-bar"><div style="width:${otherPct.toFixed(1)}%;height:100%;background:#94a3b8;border-radius:3px"></div></div>
+    </div>`);
+  }
+  el.innerHTML = `<div class="card p-4"><div class="section-label">Portfolio Allocation</div>${items.join('')}</div>`;
+}
+
+// ══════════════════════════════════════════════════════
+// SECTOR BREAKDOWN (Feature 9)
+// ══════════════════════════════════════════════════════
+const SECTOR_COLORS = {
+  'Tech':'#3b82f6','Finance':'#10b981','Healthcare':'#ec4899','Energy':'#f59e0b',
+  'Consumer':'#8b5cf6','ETF':'#6366f1','Industrial':'#f97316','Media':'#06b6d4',
+  'Auto/EV':'#84cc16','Crypto':'#ef4444','Other':'#94a3b8'
+};
+
+function renderSectorBreakdown(rows, totalValue){
+  const el = document.getElementById('p-sector');
+  if(!el) return;
+  if(rows.length < 2 || totalValue <= 0){ el.innerHTML = ''; return; }
+  const sectors = {};
+  rows.forEach(r=>{
+    const s = SECTOR_MAP[r.t] || 'Other';
+    sectors[s] = (sectors[s]||0) + r.value;
+  });
+  const sorted = Object.entries(sectors).sort((a,b)=>b[1]-a[1]);
+  const items = sorted.map(([s,v])=>{
+    const pct = (v/totalValue*100);
+    const color = SECTOR_COLORS[s]||'#94a3b8';
+    return `<div class="mb-2">
+      <div class="flex justify-between text-xs mb-1">
+        <span class="font-semibold text-gray-700">${esc(s)}</span>
+        <span class="text-gray-400">${pct.toFixed(1)}%</span>
+      </div>
+      <div class="range-bar" style="height:6px"><div style="width:${pct.toFixed(1)}%;height:100%;background:${color};border-radius:3px;transition:width .6s"></div></div>
+    </div>`;
+  });
+  el.innerHTML = `<div class="card p-4"><div class="section-label">Sector Exposure</div>${items.join('')}</div>`;
 }
 
 // ══════════════════════════════════════════════════════

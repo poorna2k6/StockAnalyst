@@ -195,7 +195,7 @@
     body.dark .insight-buy{background:#14532d;color:#86efac}
     body.dark .insight-risk{background:#431407;color:#fdba74}
     body.dark .insight-info{background:#1e3a5f;color:#93c5fd}
-    body.dark #settings-modal>div,body.dark #import-modal>div{background:#1e293b}
+    body.dark #settings-modal>div,body.dark #import-modal>div,body.dark #onboarding-modal>div{background:#1e293b}
     body.dark .sticky{background:#1e293b!important}
     body.dark .range-bar{background:#334155}
     body.dark .copy-btn{color:#475569}
@@ -279,9 +279,7 @@
         <span class="text-xs font-bold tracking-widest uppercase opacity-80">AI Market Intelligence</span>
         <span class="ml-auto text-xs opacity-60" id="brief-time"></span>
       </div>
-      <div id="ai-brief" class="text-sm leading-relaxed opacity-95">
-        <div class="flex items-center gap-2 opacity-70"><span class="spin" style="border-top-color:white;border-color:rgba(255,255,255,.3)"></span> Analyzing today's market…</div>
-      </div>
+      <div id="ai-brief" class="text-sm leading-relaxed opacity-95"></div>
     </div>
 
     <div class="card p-4">
@@ -561,6 +559,44 @@
 </div>
 
 <!-- Settings Modal -->
+<!-- Onboarding Modal (first-run) -->
+<div id="onboarding-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:600;align-items:flex-end;justify-content:center">
+  <div class="bg-white w-full rounded-t-3xl p-6 space-y-4" style="max-height:85vh;overflow-y:auto;max-width:512px;margin:0 auto">
+    <div class="text-center pt-2">
+      <div class="w-16 h-16 rounded-3xl mx-auto mb-3 flex items-center justify-center" style="background:linear-gradient(135deg,#1d4ed8,#6d28d9);box-shadow:0 4px 16px rgba(99,60,200,.4)">
+        <svg width="36" height="36" viewBox="0 0 26 26" fill="none">
+          <rect x="2" y="17" width="4" height="7" rx="1" fill="white" opacity="0.75"/>
+          <rect x="8" y="11" width="4" height="9" rx="1" fill="white" opacity="0.85"/>
+          <rect x="14" y="14" width="4" height="7" rx="1" fill="white" opacity="0.75"/>
+          <rect x="20" y="5" width="4" height="11" rx="1" fill="white"/>
+          <polyline points="4,15 10,10 16,12 22,5" stroke="#FCD34D" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="font-bold text-gray-900 text-xl">Welcome to My Stock Analyst</div>
+      <div class="text-gray-500 text-sm mt-1">Your free AI-powered investment companion</div>
+    </div>
+    <div class="space-y-3">
+      <div class="flex items-start gap-3 bg-blue-50 rounded-2xl p-3">
+        <span class="text-2xl flex-shrink-0">📈</span>
+        <div><div class="font-semibold text-gray-800 text-sm">Live Market Data</div><div class="text-xs text-gray-500">Real-time quotes, trending stocks, and market signals — all free, no login required.</div></div>
+      </div>
+      <div class="flex items-start gap-3 bg-purple-50 rounded-2xl p-3">
+        <span class="text-2xl flex-shrink-0">🤖</span>
+        <div><div class="font-semibold text-gray-800 text-sm">AI Analysis (your own key)</div><div class="text-xs text-gray-500">Add a free Claude or Gemini API key to unlock AI stock analysis, investment plans, and portfolio advice.</div></div>
+      </div>
+      <div class="flex items-start gap-3 bg-green-50 rounded-2xl p-3">
+        <span class="text-2xl flex-shrink-0">🔒</span>
+        <div><div class="font-semibold text-gray-800 text-sm">100% Private</div><div class="text-xs text-gray-500">Your data stays on your device. No account, no server, no tracking. Your API key never leaves your browser.</div></div>
+      </div>
+    </div>
+    <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-800">
+      <strong>Important:</strong> This app provides educational market analysis only — not personalized financial advice. All investment decisions are your own responsibility. Past performance does not guarantee future results.
+    </div>
+    <button class="btn btn-primary" onclick="onboardingFinish()">Get Started — Add API Key</button>
+    <button onclick="closeOnboarding()" class="w-full text-center text-sm text-gray-400 pb-1" style="background:none;border:none;cursor:pointer">Skip for now (browse without AI)</button>
+  </div>
+</div>
+
 <div id="settings-modal" onclick="if(event.target===this)closeSettings()">
   <div class="bg-white w-full rounded-t-3xl p-6 space-y-4" style="max-height:80vh;overflow-y:auto">
     <div class="flex items-center justify-between">
@@ -591,6 +627,11 @@
     </div>
     <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
     <div class="text-xs text-gray-400 text-center pt-2">Educational tool only. Not financial advice. Always do your own research.</div>
+    <div class="flex gap-2 justify-center flex-wrap">
+      <a href="terms.html" target="_blank" class="text-xs text-blue-500 underline">Terms &amp; Disclaimers</a>
+      <span class="text-gray-300">·</span>
+      <button onclick="shareApp()" class="text-xs text-blue-500 underline" style="background:none;border:none;cursor:pointer;padding:0">Share App</button>
+    </div>
 
     <!-- Feature Highlights -->
     <div class="border-t border-gray-100 pt-4">
@@ -640,6 +681,17 @@ function safeJsonParse(key, fallback){
 }
 let portfolio = safeJsonParse('msa_portfolio', {});
 let quotes = {};
+// Track insertion order for LRU eviction
+let _quotesOrder = [];
+function cacheQuote(ticker, data){
+  if(!_quotesOrder.includes(ticker)) _quotesOrder.push(ticker);
+  quotes[ticker] = data;
+  // Evict oldest entries when cache exceeds 150 tickers
+  if(_quotesOrder.length > 150){
+    const evict = _quotesOrder.splice(0, 50);
+    evict.forEach(t=>{ delete quotes[t]; });
+  }
+}
 let chatHistory = [];
 let watchlist = safeJsonParse('msa_watchlist', []);
 let alerts   = safeJsonParse('msa_alerts',    {});
@@ -663,6 +715,31 @@ const SECTOR_MAP = {
   SPY:'ETF',QQQ:'ETF',VTI:'ETF',VOO:'ETF',IWM:'ETF',
   SCHD:'ETF',VYM:'ETF',JEPI:'ETF',SGOV:'ETF',BIL:'ETF',
   PLTR:'Tech',ARM:'Tech',MSTR:'Crypto',COIN:'Crypto',
+  // Fintech / Payments
+  SQ:'Finance',PYPL:'Finance',AFRM:'Finance',SOFI:'Finance',NU:'Finance',
+  // Rideshare / Mobility
+  UBER:'Consumer',LYFT:'Consumer',
+  // Crypto-adjacent miners
+  RIOT:'Crypto',MARA:'Crypto',HUT:'Crypto',CLSK:'Crypto',
+  // AI / Semiconductor
+  SMCI:'Tech',AVGO:'Tech',QCOM:'Tech',MU:'Tech',TXN:'Tech',ASML:'Tech',TSM:'Tech',
+  // Biotech / Pharma
+  GILD:'Healthcare',REGN:'Healthcare',VRTX:'Healthcare',BSX:'Healthcare',ISRG:'Healthcare',
+  // Retail / E-commerce
+  SHOP:'Consumer',ETSY:'Consumer',EBAY:'Consumer',BABA:'Consumer',JD:'Consumer',
+  // Cloud / SaaS
+  NOW:'Tech',SNOW:'Tech',DDOG:'Tech',ZM:'Tech',TWLO:'Tech',NET:'Tech',
+  OKTA:'Tech',HUBS:'Tech',BILL:'Tech',MNDY:'Tech',
+  // Media / Streaming
+  WBD:'Media',PARA:'Media',FOXA:'Media',
+  // Energy / Clean
+  NEE:'Energy',FSLR:'Energy',ENPH:'Energy',SEDG:'Energy',
+  // Consumer staples
+  MDLZ:'Consumer',CLX:'Consumer',GIS:'Consumer',HSY:'Consumer',
+  // Industrial / Defense
+  RTX:'Industrial',LMT:'Industrial',NOC:'Industrial',GD:'Industrial',LHX:'Industrial',
+  // Real Estate adjacent
+  AMT:'Industrial',CCI:'Industrial',EQIX:'Tech',
 };
 
 const TIPS = {
@@ -746,44 +823,60 @@ function getActiveAI(){
   return null;
 }
 
-async function streamAI(systemPrompt, messages, maxTokens, onChunk){
+let _activeStreamController = null;
+
+async function streamAI(systemPrompt, messages, maxTokens, onChunk, signal){
   const ai = getActiveAI();
   if(!ai) throw new Error('No API key found. Tap the gear icon → add Claude or Gemini key.');
 
-  if(ai === 'claude'){
-    const resp = await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'x-api-key':apiKey,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:maxTokens,stream:true,system:systemPrompt,messages})
-    });
-    if(!resp.ok){const e=await resp.json();throw new Error('Claude: '+(e.error?.message||resp.status));}
-    const reader=resp.body.getReader(),dec=new TextDecoder();
-    while(true){
-      const{done,value}=await reader.read();if(done)break;
-      for(const line of dec.decode(value,{stream:true}).split('\n')){
-        if(!line.startsWith('data: '))continue;
-        const raw=line.slice(6).trim();if(raw==='[DONE]')break;
-        try{const ev=JSON.parse(raw);if(ev.delta?.text)onChunk(ev.delta.text);}catch{}
+  // Create our own AbortController with 60s timeout; merge with caller signal if provided
+  const ctrl = new AbortController();
+  _activeStreamController = ctrl;
+  const timeoutId = setTimeout(()=>ctrl.abort(new Error('AI request timed out after 60s')), 60000);
+  signal?.addEventListener('abort', ()=>ctrl.abort(signal.reason));
+
+  try{
+    if(ai === 'claude'){
+      const resp = await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        signal: ctrl.signal,
+        headers:{'x-api-key':apiKey,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
+        body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:maxTokens,stream:true,system:systemPrompt,messages})
+      });
+      if(!resp.ok){const e=await resp.json();throw new Error('Claude: '+(e.error?.message||resp.status));}
+      const reader=resp.body.getReader(),dec=new TextDecoder();
+      while(true){
+        const{done,value}=await reader.read();if(done)break;
+        if(ctrl.signal.aborted) break;
+        for(const line of dec.decode(value,{stream:true}).split('\n')){
+          if(!line.startsWith('data: '))continue;
+          const raw=line.slice(6).trim();if(raw==='[DONE]')break;
+          try{const ev=JSON.parse(raw);if(ev.delta?.text)onChunk(ev.delta.text);}catch{}
+        }
+      }
+    } else {
+      // Gemini
+      const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?key=${geminiKey}&alt=sse`;
+      const contents=messages.map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:m.content}]}));
+      const resp=await fetch(url,{
+        method:'POST',signal: ctrl.signal,headers:{'content-type':'application/json'},
+        body:JSON.stringify({system_instruction:{parts:[{text:systemPrompt}]},contents,generationConfig:{maxOutputTokens:maxTokens}})
+      });
+      if(!resp.ok){const e=await resp.json();throw new Error('Gemini: '+(e.error?.message||resp.status));}
+      const reader=resp.body.getReader(),dec=new TextDecoder();
+      while(true){
+        const{done,value}=await reader.read();if(done)break;
+        if(ctrl.signal.aborted) break;
+        for(const line of dec.decode(value,{stream:true}).split('\n')){
+          if(!line.startsWith('data: '))continue;
+          const raw=line.slice(6).trim();
+          try{const ev=JSON.parse(raw);const t=ev.candidates?.[0]?.content?.parts?.[0]?.text;if(t)onChunk(t);}catch{}
+        }
       }
     }
-  } else {
-    // Gemini
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?key=${geminiKey}&alt=sse`;
-    const contents=messages.map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:m.content}]}));
-    const resp=await fetch(url,{
-      method:'POST',headers:{'content-type':'application/json'},
-      body:JSON.stringify({system_instruction:{parts:[{text:systemPrompt}]},contents,generationConfig:{maxOutputTokens:maxTokens}})
-    });
-    if(!resp.ok){const e=await resp.json();throw new Error('Gemini: '+(e.error?.message||resp.status));}
-    const reader=resp.body.getReader(),dec=new TextDecoder();
-    while(true){
-      const{done,value}=await reader.read();if(done)break;
-      for(const line of dec.decode(value,{stream:true}).split('\n')){
-        if(!line.startsWith('data: '))continue;
-        const raw=line.slice(6).trim();
-        try{const ev=JSON.parse(raw);const t=ev.candidates?.[0]?.content?.parts?.[0]?.text;if(t)onChunk(t);}catch{}
-      }
-    }
+  } finally {
+    clearTimeout(timeoutId);
+    if(_activeStreamController === ctrl) _activeStreamController = null;
   }
 }
 
@@ -791,20 +884,23 @@ async function streamAI(systemPrompt, messages, maxTokens, onChunk){
 // TABS
 // ══════════════════════════════════════════════════════
 function switchTab(name, btn){
+  // Cancel any in-flight AI stream when navigating away
+  if(_activeStreamController) _activeStreamController.abort();
+
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('tab-active'));
   document.getElementById('tab-'+name).classList.add('active');
   btn.classList.add('tab-active');
   if(name==='portfolio'){
     renderPortfolio();
-    if(Date.now()-_portfolioLastFetch > STALE_MS && Object.keys(portfolio).length) refreshPortfolio();
+    if(!_portfolioRefreshing && Date.now()-_portfolioLastFetch > STALE_MS && Object.keys(portfolio).length) refreshPortfolio();
   }
-  if(name==='brief' && Date.now()-_briefLastFetch > STALE_MS) refreshBrief();
+  if(name==='brief' && !_briefAnalyzing && Date.now()-_briefLastFetch > STALE_MS) refreshBrief();
   if(name==='watch'){
     renderWatchlist();
     // Fetch any missing quotes
     const missing = watchlist.filter(t=>!quotes[t]);
-    if(missing.length) Promise.all(missing.map(t=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;}))).then(()=>renderWatchlist());
+    if(missing.length) Promise.all(missing.map(t=>fetchQuote(t).then(q=>{if(q)cacheQuote(t,q);}))).then(()=>renderWatchlist());
   }
 }
 function goToTab(name){
@@ -903,6 +999,7 @@ async function fetchTrending(){
 // ══════════════════════════════════════════════════════
 async function loadBrief(){
   _briefLastFetch = Date.now();
+  _briefLoading = true;
   _updateLastUpdated();
   document.getElementById('header-status').textContent = 'Loading market data…';
 
@@ -915,6 +1012,7 @@ async function loadBrief(){
   // Surface a visible error if all index fetches failed (proxy / network outage)
   const anyIndexLoaded = idxQuotes.some(Boolean);
   if(!anyIndexLoaded){
+    _briefLoading = false;
     document.getElementById('header-status').textContent = 'Data unavailable';
     const idxEl2 = document.getElementById('indexes-list');
     idxEl2.innerHTML = `<div class="text-sm text-red-500 py-2">Market data unavailable — tap <strong>Refresh</strong> to retry.</div>`;
@@ -1028,18 +1126,24 @@ async function loadBrief(){
   }).join('');
 
   // Cache all quotes
-  pickTickers.forEach((t,i) => { if(pickQuotes[i]) quotes[t] = pickQuotes[i]; });
-  idxQuotes.forEach((q,i) => { if(q) quotes[INDEXES[i].ticker] = q; });
+  pickTickers.forEach((t,i) => { if(pickQuotes[i]) cacheQuote(t, pickQuotes[i]); });
+  idxQuotes.forEach((q,i) => { if(q) cacheQuote(INDEXES[i].ticker, q); });
 
   document.getElementById('brief-time').textContent = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
   updateMarketCountdown();
   checkAllAlerts();
 
+  _briefLoading = false;
+  updateMarketCountdown();
+
   // Fire AI brief (non-blocking)
   loadAIBrief(idxQuotes, pickQuotes, pickTickers);
 }
 
+let _briefAnalyzing = false;
 async function loadAIBrief(idxQuotes, pickQuotes, pickTickers){
+  if(_briefAnalyzing) return;
+  _briefAnalyzing = true;
   const briefEl = document.getElementById('ai-brief');
   if(!getActiveAI()){
     // Rule-based brief
@@ -1049,6 +1153,7 @@ async function loadAIBrief(idxQuotes, pickQuotes, pickTickers){
     briefEl.textContent = `The S&P 500 is in ${direction} (${fmtN(spy.changePct)}). ${qqq&&qqq.changePct>spy.changePct+0.3?'Tech is leading the market higher — AI and semiconductor stocks are in focus.':'The move is broad-based across most sectors.'} Add an API key in Settings for a deeper AI-powered daily briefing.`;
     return;
   }
+  briefEl.innerHTML = '<div class="flex items-center gap-2 opacity-70"><span class="spin" style="border-top-color:white;border-color:rgba(255,255,255,.3)"></span> Analyzing today\'s market…</div>';
   try{
     const idxSummary = INDEXES.map((idx,i)=>{ const q=idxQuotes[i]; return q?`${idx.ticker}(${idx.name.split('(')[0].trim()}): ${fmt(q.price)} ${fmtN(q.changePct)}`:''; }).filter(Boolean).join(' | ');
     const topMoved = pickTickers.map((t,i)=>{ const q=pickQuotes[i]; return q?`${t} ${fmtN(q.changePct)}`:null; }).filter(Boolean).slice(0,6).join(', ');
@@ -1065,7 +1170,8 @@ Top movers: ${topMoved}
 Write a sharp, intelligent 3-sentence market briefing for a beginner investor. Cover: (1) overall market mood and what's driving it, (2) which sectors or themes to watch today, (3) one tactical insight — what a smart investor should do or watch for today. Plain English, no jargon, confident and direct tone. Do NOT open with a time-based greeting like "Good morning" — start directly with the market analysis.`;
     let text = '';
     await streamAI('You are a sharp senior market strategist giving a daily briefing. Be direct, insightful, and specific — not generic. Never start with time-based greetings. Jump straight into market analysis.', [{role:'user',content:prompt}], 250, chunk=>{ text+=chunk; briefEl.textContent=text; });
-  } catch(e){ briefEl.textContent = 'AI brief unavailable. Check your API key in Settings.'; }
+  } catch(e){ briefEl.innerHTML = '<p class="text-red-300 text-sm">AI brief unavailable. Check your API key in Settings.</p>'; }
+  finally { _briefAnalyzing = false; }
 }
 
 async function refreshBrief(){
@@ -1094,7 +1200,7 @@ async function handleInvestmentPlan(){
   const tickers = UNIVERSE[risk];
   const qResults = await Promise.all(tickers.map(t => fetchQuote(t)));
   const validQuotes = tickers.map((t,i) => ({ ticker:t, q:qResults[i] })).filter(x=>x.q);
-  validQuotes.forEach(x => { quotes[x.ticker]=x.q; });
+  validQuotes.forEach(x => { cacheQuote(x.ticker, x.q); });
 
   // Build stock context for Claude
   const stockData = validQuotes.map(x => {
@@ -1167,7 +1273,7 @@ Build my complete plan with exact allocations, entry prices, profit targets, sto
     </div>
     <div id="invest-stream" class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap streaming"></div>
   </div>
-  <div class="card p-3 text-center text-xs text-gray-400">Educational analysis only. Not financial advice. Never invest more than you can afford to lose.</div>`;
+  <div class="card p-3 text-center text-xs text-gray-400">Hypothetical example only — not personalized financial advice. Allocations shown are illustrative. Never invest money you cannot afford to lose. Past performance does not guarantee future results. Consult a licensed financial advisor before making investment decisions.</div>`;
 
   try{
     const streamEl = document.getElementById('invest-stream');
@@ -1219,7 +1325,7 @@ function renderRuleBasedPlan(budget, risk, horizon, validQuotes){
       </div>`;
     }).join('')}
     <div class="text-xs text-gray-400 mt-2 p-3 bg-gray-50 rounded-xl">Add your Anthropic API key in Settings for detailed AI analysis with specific catalysts, risks, and long-term strategy.</div>
-    <div class="text-xs text-gray-400 text-center">Educational only. Not financial advice. Past performance doesn't guarantee future results.</div>
+    <div class="text-xs text-gray-400 text-center">Hypothetical example only — not personalized financial advice. Consult a licensed advisor before investing.</div>
   </div>`;
 }
 
@@ -1270,7 +1376,7 @@ async function handleChat(){
       Promise.all(tickers.map(t=>fetchNews(t))),
     ]);
 
-    tickers.forEach((t,i)=>{ if(quotesArr[i]) quotes[t]=quotesArr[i]; });
+    tickers.forEach((t,i)=>{ if(quotesArr[i]) cacheQuote(t, quotesArr[i]); });
 
     contextData = tickers.map((t,i)=>{
       const q=quotesArr[i], f=fundamentalsArr[i];
@@ -1383,6 +1489,8 @@ STYLE RULES:
     loadEl.className='chat-msg-ai';
     loadEl.textContent=`Error: ${err.message}. Please check your API key in Settings.`;
   } finally {
+    // Clear any lingering spinner if the element is still in loading state
+    if(loadEl && loadEl.querySelector('.spin')) loadEl.innerHTML = '';
     _chatBusy = false; input.disabled = false; sendBtn.disabled = false; sendBtn.style.opacity = '1';
   }
   scrollChat();
@@ -1487,7 +1595,7 @@ CRITICAL: Read share counts carefully and keep all decimals. Do not guess or omi
     `<div class="flex items-center gap-2"><span class="spin"></span> Fetching today's prices for ${holdings.length} stock${holdings.length>1?'s':''}…</div>`;
   await Promise.all(holdings.map(async h => {
     const q = await fetchQuote(h.ticker).catch(()=>null);
-    if(q){ quotes[h.ticker] = q; h.name = q.name; }
+    if(q){ cacheQuote(h.ticker, q); h.name = q.name; }
     // avgCost: keep existing portfolio cost if available; fall back to live price for new positions only
     h.avgCost = portfolio[h.ticker]?.avgCost || (q ? q.price : 0);
   }));
@@ -1603,7 +1711,7 @@ async function confirmImport(){
   }
   savePortfolio();
   const missingTickers = Object.keys(portfolio).filter(t=>!quotes[t]);
-  if(missingTickers.length) await Promise.all(missingTickers.map(t=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;})));
+  if(missingTickers.length) await Promise.all(missingTickers.map(t=>fetchQuote(t).then(q=>{if(q)cacheQuote(t,q);})));
   renderPortfolio();
   closeImport();
   goToTab('portfolio');
@@ -1621,7 +1729,7 @@ function closeImport(){
 // ══════════════════════════════════════════════════════
 // PORTFOLIO
 // ══════════════════════════════════════════════════════
-function savePortfolio(){ localStorage.setItem('msa_portfolio', JSON.stringify(portfolio)); }
+function savePortfolio(){ try{ localStorage.setItem('msa_portfolio', JSON.stringify(portfolio)); }catch(e){ toast('Storage full — oldest data may not save. Free up space in your browser.'); } }
 
 async function addPosition(){
   const ticker = document.getElementById('p-ticker').value.trim().toUpperCase();
@@ -1637,7 +1745,7 @@ async function addPosition(){
   toast(`Added ${shares} × ${ticker}`);
   // Fetch quote for new ticker
   const q = await fetchQuote(ticker);
-  if(q) quotes[ticker]=q;
+  if(q) cacheQuote(ticker, q);
   renderPortfolio();
 }
 
@@ -1715,40 +1823,47 @@ function renderPortfolio(){
   const missing = entries.filter(([t])=>!quotes[t]);
   if(missing.length && !_portfolioRefreshing){
     _portfolioRefreshing = true;
-    Promise.all(missing.map(([t])=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;}))).then(()=>{ _portfolioRefreshing=false; renderPortfolio(); }).catch(()=>{ _portfolioRefreshing=false; });
+    Promise.all(missing.map(([t])=>fetchQuote(t).then(q=>{if(q)cacheQuote(t,q);}))).then(()=>{ _portfolioRefreshing=false; renderPortfolio(); }).catch(()=>{ _portfolioRefreshing=false; });
   }
 }
 
 async function refreshPortfolio(){
   const btn = document.getElementById('p-refresh-btn');
   if(btn) btn.innerHTML = '<span class="spin" style="display:inline-block;width:14px;height:14px;border-width:2px"></span>';
-  const entries = Object.entries(portfolio);
-  if(entries.length){
-    await Promise.all(entries.map(([t])=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;})));
-    checkAllAlerts();
-    _portfolioLastFetch = Date.now();
-    _updateLastUpdated();
-    renderPortfolio();
-    toast('Prices updated!');
+  try{
+    const entries = Object.entries(portfolio);
+    if(entries.length){
+      await Promise.all(entries.map(([t])=>fetchQuote(t).then(q=>{if(q)cacheQuote(t,q);})));
+      checkAllAlerts();
+      _portfolioLastFetch = Date.now();
+      _updateLastUpdated();
+      renderPortfolio();
+      toast('Prices updated!');
+    }
+  } finally {
+    if(btn) btn.innerHTML = '&#8635; Refresh';
   }
-  if(btn) btn.innerHTML = '&#8635; Refresh';
 }
 
+let _portfolioAnalyzing = false;
 async function analyzePortfolio(){
+  if(_portfolioAnalyzing) return;
   const entries = Object.entries(portfolio);
   if(!entries.length){ toast('Add positions first'); return; }
+  _portfolioAnalyzing = true;
   const el=document.getElementById('p-analysis');
   el.innerHTML='<div class="flex items-center gap-2 text-sm text-gray-400"><span class="spin"></span> Analyzing your portfolio…</div>';
   el.scrollIntoView({behavior:'smooth', block:'nearest'});
-  await Promise.all(entries.map(([t])=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;})));
+  if(!getActiveAI()){
+    el.innerHTML='<div class="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-800">To get AI analysis, add a free API key in <button onclick="openSettings()" class="font-bold underline">Settings</button>. Supports Claude (Anthropic) and Gemini (Google) — both free tiers available.</div>';
+    _portfolioAnalyzing = false;
+    return;
+  }
+  await Promise.all(entries.map(([t])=>fetchQuote(t).then(q=>{if(q)cacheQuote(t,q);})));
   const lines = entries.map(([t,pos])=>{
     const q=quotes[t],price=q?q.price:pos.avgCost,value=pos.shares*price,cost=pos.shares*pos.avgCost;
     return `${t}: ${pos.shares} shares @ avg ${fmt(pos.avgCost)}, now ${fmt(price)}, P&L: ${(((price/pos.avgCost)-1)*100).toFixed(1)}%, value ${fmt(value)}`;
   });
-  if(!getActiveAI()){
-    el.innerHTML='<div class="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-800">To get AI analysis, add a free API key in <button onclick="openSettings()" class="font-bold underline">Settings</button>. Supports Claude (Anthropic) and Gemini (Google) — both free tiers available.</div>';
-    return;
-  }
   try{
     const sysPrompt='You are a friendly personal investment advisor. Analyze portfolios in plain English for beginners. For each position give: current status (up/down), what to do (hold/add/reduce), and why in 1-2 sentences. End with overall portfolio health score (1-10) and top 2 specific action items.';
     const msgs=[{role:'user',content:`Analyze my stock portfolio:\n${lines.join('\n')}\n\nI am a beginner investor. Give specific advice on each position and overall strategy.`}];
@@ -1758,17 +1873,19 @@ async function analyzePortfolio(){
     await streamAI(sysPrompt, msgs, 1200, chunk=>{ text+=chunk; se.textContent=text; });
     se.classList.remove('streaming');
   } catch(err){ el.innerHTML=`<div class="text-red-500 text-sm">${err.message}</div>`; }
+  finally { _portfolioAnalyzing = false; }
 }
 
 // ══════════════════════════════════════════════════════
 // EARN / INCOME ADVISOR
 // ══════════════════════════════════════════════════════
 async function getIncomeIdeas(){
+  const el = document.getElementById('earn-result');
+  el.innerHTML = '';
   if(!getActiveAI()){ toast('Add a Claude or Gemini API key in Settings first'); openSettings(); return; }
   const style   = document.getElementById('earn-goal').value;
   const risk    = document.getElementById('earn-risk').value;
   const capital = document.getElementById('earn-capital').value.trim();
-  const el = document.getElementById('earn-result');
   document.getElementById('earn-tips').style.display = 'none';
   el.innerHTML = '<div class="card p-4"><div class="flex items-center gap-2 text-sm text-gray-400"><span class="spin"></span> Finding stock opportunities for you…</div></div>';
   el.scrollIntoView({behavior:'smooth', block:'nearest'});
@@ -1884,18 +2001,20 @@ const NYSE_HOLIDAYS = new Set([
   '2025-06-19','2025-07-04','2025-09-01','2025-11-27','2025-12-25',
   '2026-01-01','2026-01-19','2026-02-16','2026-04-03','2026-05-25',
   '2026-06-19','2026-07-03','2026-09-07','2026-11-26','2026-12-25',
+  '2027-01-01','2027-01-18','2027-02-15','2027-03-26','2027-05-31',
+  '2027-06-18','2027-07-05','2027-09-06','2027-11-25','2027-12-24',
 ]);
 function isNYSEHoliday(etDate){
   const y = etDate.getFullYear(), m = String(etDate.getMonth()+1).padStart(2,'0'), d = String(etDate.getDate()).padStart(2,'0');
   return NYSE_HOLIDAYS.has(`${y}-${m}-${d}`);
 }
 
+let _briefLoading = false;
 function updateMarketCountdown(){
   const el = document.getElementById('header-status');
   if(!el) return;
-  const cur = el.textContent;
-  // Don't override the loading state
-  if(cur.startsWith('Loading')) return;
+  // Don't override if brief is actively loading
+  if(_briefLoading) return;
   const now = new Date();
   const etNow = new Date(now.toLocaleString('en-US', {timeZone:'America/New_York'}));
   const etHour = etNow.getHours(), etMin = etNow.getMinutes(), etDay = etNow.getDay();
@@ -1928,10 +2047,14 @@ setInterval(updateMarketCountdown, 60000);
 // ══════════════════════════════════════════════════════
 // WATCHLIST (Feature 2)
 // ══════════════════════════════════════════════════════
-function saveWatchlist(){ localStorage.setItem('msa_watchlist', JSON.stringify(watchlist)); }
+function saveWatchlist(){ try{ localStorage.setItem('msa_watchlist', JSON.stringify(watchlist)); }catch(e){ toast('Storage full — watchlist may not save.'); } }
 
+let _wlDebounce = {};
 function toggleWatchlist(ticker){
   const t = ticker.toUpperCase();
+  if(_wlDebounce[t]) return;
+  _wlDebounce[t] = true;
+  setTimeout(()=>{ delete _wlDebounce[t]; }, 300);
   const idx = watchlist.indexOf(t);
   if(idx === -1){
     watchlist.push(t);
@@ -2007,7 +2130,7 @@ function removeFromWatchlist(ticker){
 async function refreshWatchlist(){
   if(!watchlist.length) return;
   toast('Refreshing watchlist…');
-  await Promise.all(watchlist.map(t=>fetchQuote(t).then(q=>{if(q)quotes[t]=q;})));
+  await Promise.all(watchlist.map(t=>fetchQuote(t).then(q=>{if(q)cacheQuote(t,q);})));
   checkAllAlerts();
   renderWatchlist();
   toast('Watchlist updated!');
@@ -2054,7 +2177,7 @@ function briefSearch(){
 // ══════════════════════════════════════════════════════
 // PRICE ALERTS (Feature 7)
 // ══════════════════════════════════════════════════════
-function saveAlerts(){ localStorage.setItem('msa_alerts', JSON.stringify(alerts)); }
+function saveAlerts(){ try{ localStorage.setItem('msa_alerts', JSON.stringify(alerts)); }catch(e){ toast('Storage full — alerts may not save.'); } }
 
 function setAlert(ticker){
   const t = ticker.toUpperCase();
@@ -2167,12 +2290,58 @@ function renderSectorBreakdown(rows, totalValue){
 }
 
 // ══════════════════════════════════════════════════════
+// SHARE APP
+// ══════════════════════════════════════════════════════
+function shareApp(){
+  const data = { title: 'My Stock Analyst', text: 'Free AI-powered stock analysis app — no account needed. Analyze any stock instantly.', url: window.location.href.split('?')[0] };
+  if(navigator.share){ navigator.share(data).catch(()=>{}); }
+  else { navigator.clipboard.writeText(data.url).then(()=>toast('App link copied to clipboard!')).catch(()=>toast('Share: ' + data.url)); }
+}
+
+// ══════════════════════════════════════════════════════
+// FIRST-RUN ONBOARDING
+// ══════════════════════════════════════════════════════
+function showOnboarding(){
+  const el = document.getElementById('onboarding-modal');
+  if(el) el.style.display = 'flex';
+}
+function closeOnboarding(){
+  const el = document.getElementById('onboarding-modal');
+  if(el) el.style.display = 'none';
+  localStorage.setItem('msa_onboarded', '1');
+}
+function onboardingFinish(){
+  closeOnboarding();
+  openSettings();
+}
+
+// ══════════════════════════════════════════════════════
+// MULTI-TAB STORAGE SYNC
+// ══════════════════════════════════════════════════════
+window.addEventListener('storage', e => {
+  if(e.key === 'msa_portfolio'){
+    portfolio = safeJsonParse('msa_portfolio', {});
+    renderPortfolio();
+  } else if(e.key === 'msa_watchlist'){
+    watchlist = safeJsonParse('msa_watchlist', []);
+    renderWatchlist();
+  } else if(e.key === 'msa_alerts'){
+    alerts = safeJsonParse('msa_alerts', {});
+  } else if(e.key === 'msa_dark'){
+    _darkMode = localStorage.getItem('msa_dark') === '1';
+    applyDark(_darkMode);
+  }
+});
+
+// ══════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════
 applyDark(_darkMode);
 loadBrief();
 renderPortfolio();
 renderWatchlist();
+// Show onboarding for first-time visitors
+if(!localStorage.getItem('msa_onboarded') && !apiKey && !geminiKey) setTimeout(showOnboarding, 1200);
 </script>
 </body>
 </html>

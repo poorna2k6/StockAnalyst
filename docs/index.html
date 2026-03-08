@@ -634,11 +634,15 @@ let apiKey = localStorage.getItem('msa_key') || '';
 let geminiKey = localStorage.getItem('msa_gemini') || '';
 let aiPref = localStorage.getItem('msa_ai_pref') || 'auto';
 let userName = localStorage.getItem('msa_name') || '';
-let portfolio = JSON.parse(localStorage.getItem('msa_portfolio') || '{}');
+function safeJsonParse(key, fallback){
+  try{ return JSON.parse(localStorage.getItem(key)) ?? fallback; }
+  catch{ return fallback; }
+}
+let portfolio = safeJsonParse('msa_portfolio', {});
 let quotes = {};
 let chatHistory = [];
-let watchlist = JSON.parse(localStorage.getItem('msa_watchlist') || '[]');
-let alerts   = JSON.parse(localStorage.getItem('msa_alerts')    || '{}');
+let watchlist = safeJsonParse('msa_watchlist', []);
+let alerts   = safeJsonParse('msa_alerts',    {});
 let _darkMode = localStorage.getItem('msa_dark') === '1';
 
 const BUILD = 'v2.3 · 2026-03-07';
@@ -908,6 +912,16 @@ async function loadBrief(){
     fetchTrending(),
   ]);
 
+  // Surface a visible error if all index fetches failed (proxy / network outage)
+  const anyIndexLoaded = idxQuotes.some(Boolean);
+  if(!anyIndexLoaded){
+    document.getElementById('header-status').textContent = 'Data unavailable';
+    const idxEl2 = document.getElementById('indexes-list');
+    idxEl2.innerHTML = `<div class="text-sm text-red-500 py-2">Market data unavailable — tap <strong>Refresh</strong> to retry.</div>`;
+    document.getElementById('market-pulse').innerHTML = `<div class="text-sm text-gray-400 py-2">Unable to load market data. Check your connection and try again.</div>`;
+    return;
+  }
+
   // Render indexes
   const idxEl = document.getElementById('indexes-list');
   idxEl.innerHTML = INDEXES.map((idx,i) => {
@@ -930,8 +944,9 @@ async function loadBrief(){
   const etNow = new Date(now.toLocaleString('en-US', {timeZone:'America/New_York'}));
   const etHour = etNow.getHours(), etMin = etNow.getMinutes(), etDay = etNow.getDay();
   const isWeekend = etDay === 0 || etDay === 6;
-  const isMarketHours = !isWeekend && (etHour > 9 || (etHour === 9 && etMin >= 30)) && etHour < 16;
-  const isPreMarket = !isWeekend && etHour >= 4 && (etHour < 9 || (etHour === 9 && etMin < 30));
+  const isHolidayToday = isNYSEHoliday(etNow);
+  const isMarketHours = !isWeekend && !isHolidayToday && (etHour > 9 || (etHour === 9 && etMin >= 30)) && etHour < 16;
+  const isPreMarket = !isWeekend && !isHolidayToday && etHour >= 4 && (etHour < 9 || (etHour === 9 && etMin < 30));
 
   let mood='', moodClass='', moodIcon='', insights=[], signals=[];
   if(spy){
@@ -969,14 +984,14 @@ async function loadBrief(){
       else if(pos<20) signals.push({text:`S&P 500 is near 52-week lows — potential value opportunity but wait for reversal signal`,color:'border-red-200'});
     }
   }
-  if(!isMarketHours) signals.push({text:isWeekend?'Weekend — US markets are closed. Trading resumes Monday 9:30 AM ET':isPreMarket?'Pre-market session — prices may shift significantly at 9:30 AM ET open':'US market closed — prices shown are last close. Market opens Mon–Fri 9:30 AM ET',color:'border-gray-200'});
+  if(!isMarketHours) signals.push({text:isWeekend?'Weekend — US markets are closed. Trading resumes Monday 9:30 AM ET':isHolidayToday?'NYSE Holiday — US markets are closed today. Trading resumes next business day 9:30 AM ET':isPreMarket?'Pre-market session — prices may shift significantly at 9:30 AM ET open':'US market closed — prices shown are last close. Market opens Mon–Fri 9:30 AM ET',color:'border-gray-200'});
 
   pulseEl.innerHTML = `
     <div class="flex items-center gap-2 mb-3">
       <span class="text-lg">${moodIcon}</span>
       <div>
         <div class="flex items-center gap-2"><span class="font-bold text-gray-800 text-sm">${mood||'–'}</span><span class="pill ${moodClass} text-xs">${spy?fmtN(spy.changePct):'–'}</span></div>
-        <div class="text-xs text-gray-400">${isMarketHours?'Live Market':isWeekend?'Weekend — Market Closed':'Market Closed'} · S&amp;P 500 benchmark</div>
+        <div class="text-xs text-gray-400">${isMarketHours?'Delayed ~15m':isWeekend?'Weekend — Market Closed':isHolidayToday?'Holiday — Market Closed':'Market Closed'} · S&amp;P 500 benchmark</div>
       </div>
     </div>
     <div class="grid grid-cols-4 gap-1.5 mb-3">
@@ -1167,7 +1182,19 @@ Build my complete plan with exact allocations, entry prices, profit targets, sto
 
 function renderRuleBasedPlan(budget, risk, horizon, validQuotes){
   const sorted = [...validQuotes].sort((a,b)=>{ const ap=a.q.changePct,bp=b.q.changePct; return bp-ap; });
-  const picks = sorted.slice(0,5);
+
+  // Apply sector diversification caps for non-aggressive risk profiles
+  const sectorCap = risk === 'beginner' ? 2 : risk === 'moderate' ? 3 : Infinity; // max picks per sector
+  const sectorCount = {};
+  const capped = [];
+  for(const x of sorted){
+    const sector = SECTOR_MAP[x.ticker] || 'Other';
+    const count = sectorCount[sector] || 0;
+    if(count < sectorCap){ sectorCount[sector] = count + 1; capped.push(x); }
+    if(capped.length === 5) break;
+  }
+  // Fallback to uncapped if we couldn't fill 5 picks
+  const picks = capped.length >= 3 ? capped : sorted.slice(0,5);
   const weights = [35,25,20,12,8];
   const horizonAdj = {short:1.05,medium:1.12,long:1.25}[horizon];
   const stopAdj = {short:0.94,medium:0.90,long:0.85}[horizon];
@@ -1434,17 +1461,15 @@ CRITICAL: Read share counts carefully and keep all decimals. Do not guess or omi
   const errors = results.filter(r => r.error);
   const allHoldings = results.filter(r => r.holdings).flatMap(r => r.holdings);
 
-  // Deduplicate across screenshots: same ticker → keep the entry with more shares
-  // (guards against the same position appearing in multiple screenshots)
+  // Deduplicate across screenshots: same ticker → keep the last-processed entry
+  // (last screenshot processed wins, reflecting the most-recently-viewed state)
   const merged = {};
   for(const h of allHoldings){
     const t = String(h.ticker||'').trim().toUpperCase();
     if(!t) continue;
     const shares = parseFloat(h.shares);
     if(isNaN(shares)||shares<=0) continue;
-    if(!merged[t] || shares > merged[t].shares){
-      merged[t] = {ticker:t, shares};
-    }
+    merged[t] = {ticker:t, shares};
   }
 
   const holdings = Object.values(merged);
@@ -1457,13 +1482,14 @@ CRITICAL: Read share counts carefully and keep all decimals. Do not guess or omi
     return;
   }
 
-  // Fetch live price for each ticker — use as avgCost (don't rely on screenshot prices)
+  // Fetch live price for display — preserve existing portfolio cost basis
   document.getElementById('import-status').innerHTML =
     `<div class="flex items-center gap-2"><span class="spin"></span> Fetching today's prices for ${holdings.length} stock${holdings.length>1?'s':''}…</div>`;
   await Promise.all(holdings.map(async h => {
     const q = await fetchQuote(h.ticker).catch(()=>null);
-    if(q){ quotes[h.ticker] = q; h.avgCost = q.price; h.name = q.name; }
-    else { h.avgCost = 0; }
+    if(q){ quotes[h.ticker] = q; h.name = q.name; }
+    // avgCost: keep existing portfolio cost if available; fall back to live price for new positions only
+    h.avgCost = portfolio[h.ticker]?.avgCost || (q ? q.price : 0);
   }));
 
   showImportConfirm(holdings, errors);
@@ -1567,8 +1593,8 @@ async function confirmImport(){
     const avgCost = parseFloat(h.avgCost) || 0;
     if(!ticker||isNaN(shares)||shares<=0) continue;
     if(portfolio[ticker]){
-      // Screenshot shows current total shares — replace, keep existing avg cost since that's what was paid
-      portfolio[ticker]={shares, avgCost: avgCost || portfolio[ticker].avgCost};
+      // Screenshot shows current total shares — update shares only; always preserve original cost basis
+      portfolio[ticker]={shares, avgCost: portfolio[ticker].avgCost || avgCost};
       updated++;
     } else {
       portfolio[ticker]={shares,avgCost};
@@ -1852,6 +1878,18 @@ function toggleDark(){
 // ══════════════════════════════════════════════════════
 // MARKET CLOSE COUNTDOWN (Feature 3)
 // ══════════════════════════════════════════════════════
+// NYSE holidays (YYYY-MM-DD in ET). Update annually.
+const NYSE_HOLIDAYS = new Set([
+  '2025-01-01','2025-01-20','2025-02-17','2025-04-18','2025-05-26',
+  '2025-06-19','2025-07-04','2025-09-01','2025-11-27','2025-12-25',
+  '2026-01-01','2026-01-19','2026-02-16','2026-04-03','2026-05-25',
+  '2026-06-19','2026-07-03','2026-09-07','2026-11-26','2026-12-25',
+]);
+function isNYSEHoliday(etDate){
+  const y = etDate.getFullYear(), m = String(etDate.getMonth()+1).padStart(2,'0'), d = String(etDate.getDate()).padStart(2,'0');
+  return NYSE_HOLIDAYS.has(`${y}-${m}-${d}`);
+}
+
 function updateMarketCountdown(){
   const el = document.getElementById('header-status');
   if(!el) return;
@@ -1862,14 +1900,15 @@ function updateMarketCountdown(){
   const etNow = new Date(now.toLocaleString('en-US', {timeZone:'America/New_York'}));
   const etHour = etNow.getHours(), etMin = etNow.getMinutes(), etDay = etNow.getDay();
   const isWeekend = etDay === 0 || etDay === 6;
-  const isMarketHours = !isWeekend && (etHour > 9 || (etHour === 9 && etMin >= 30)) && etHour < 16;
-  const isPreMarket = !isWeekend && etHour >= 4 && (etHour < 9 || (etHour === 9 && etMin < 30));
+  const isHoliday = isNYSEHoliday(etNow);
+  const isMarketHours = !isWeekend && !isHoliday && (etHour > 9 || (etHour === 9 && etMin >= 30)) && etHour < 16;
+  const isPreMarket = !isWeekend && !isHoliday && etHour >= 4 && (etHour < 9 || (etHour === 9 && etMin < 30));
 
   if(isMarketHours){
-    // Time until 4 PM ET
+    // Time until 4 PM ET; data from Yahoo Finance is ~15 min delayed
     const closeMin = (16 - etHour) * 60 - etMin;
     const h = Math.floor(closeMin / 60), m = closeMin % 60;
-    el.textContent = h > 0 ? `Live · ${h}h ${m}m left` : `Live · ${m}m left`;
+    el.textContent = h > 0 ? `Delayed ~15m · ${h}h ${m}m left` : `Delayed ~15m · ${m}m left`;
   } else if(isPreMarket){
     // Time until 9:30 AM ET
     const totalMin = (9 - etHour) * 60 + (30 - etMin);
@@ -2039,7 +2078,7 @@ function setAlert(ticker){
   const m = trimmed.match(/(above|below)\s*\$?\s*(\d+\.?\d*)/);
   if(!m){ toast('Format: "above 200" or "below 150"'); return; }
   const dir = m[1], price = parseFloat(m[2]);
-  alerts[t] = { [dir]: price, _triggered: false };
+  alerts[t] = { [dir]: price };
   saveAlerts();
   toast(`🔔 Alert set: ${t} ${dir} $${price}`);
   if(document.getElementById('tab-watch').classList.contains('active')) renderWatchlist();
@@ -2047,11 +2086,13 @@ function setAlert(ticker){
 
 function checkAlertsForQuote(ticker, price){
   const a = alerts[ticker];
-  if(!a || a._triggered) return;
+  if(!a) return;
+  const now = Date.now();
+  if(a._lastFiredAt && now - a._lastFiredAt < 60000) return; // 60s cooldown
   let hit = false;
   if(a.above != null && price >= a.above){ toast(`🔔 ${ticker} hit $${price.toFixed(2)} — above your $${a.above} alert!`); hit=true; }
   else if(a.below != null && price <= a.below){ toast(`🔔 ${ticker} hit $${price.toFixed(2)} — below your $${a.below} alert!`); hit=true; }
-  if(hit){ alerts[ticker]._triggered = true; saveAlerts(); }
+  if(hit){ alerts[ticker]._lastFiredAt = now; saveAlerts(); }
 }
 
 function checkAllAlerts(){

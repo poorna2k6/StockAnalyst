@@ -257,6 +257,8 @@
     <button class="tab-btn" onclick="switchTab('portfolio',this)">Portfolio</button>
     <button class="tab-btn" onclick="switchTab('watch',this)">Watch</button>
     <button class="tab-btn" onclick="switchTab('earn',this)">Earn</button>
+    <!-- Advisor tab: only shown when account_type === 'advisor' (Phase 2) -->
+    <button class="tab-btn" id="tab-btn-advisor" style="display:none" onclick="switchTab('advisor',this)">Advisor</button>
   </div>
 </div>
 
@@ -412,6 +414,16 @@
   ══════════════════════════════════════ -->
   <div id="tab-portfolio" class="tab-pane space-y-4">
 
+    <!-- Phase 2: Multi-portfolio selector (hidden for anonymous users) -->
+    <div id="portfolio-selector-card" class="card p-3" style="display:none">
+      <div class="flex items-center gap-2">
+        <label class="text-xs font-semibold text-gray-500 flex-shrink-0">Portfolio:</label>
+        <select id="portfolio-selector" onchange="switchPortfolio(this.value)" class="flex-1 text-sm font-semibold text-gray-800 border-none bg-transparent outline-none cursor-pointer"></select>
+        <button onclick="createNewPortfolio()" class="text-xs font-semibold text-blue-600 flex-shrink-0" style="background:none;border:none;cursor:pointer">+ New</button>
+        <button onclick="sharePortfolio()" class="text-xs text-gray-400" style="background:none;border:none;cursor:pointer" title="Share portfolio">⬆</button>
+      </div>
+    </div>
+
     <div class="card p-4">
       <div class="flex items-center justify-between mb-2">
         <div class="section-label" style="margin-bottom:0">Portfolio</div>
@@ -547,6 +559,72 @@
       <div class="font-semibold text-gray-800 text-sm mb-1">T-Bills &amp; Money Market</div>
       <div class="text-xs text-gray-500">Park idle cash in SGOV or BIL — earning ~4-5% APY risk-free while you wait for the right trade.</div>
     </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       TAB 7: ADVISOR DASHBOARD (Phase 2 — advisor accounts only)
+  ══════════════════════════════════════ -->
+  <div id="tab-advisor" class="tab-pane space-y-4">
+
+    <!-- Subscription / Upgrade card -->
+    <div class="card p-4" id="advisor-subscription-card">
+      <div class="section-label">Account &amp; Billing</div>
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <div class="font-bold text-gray-900 text-sm" id="advisor-tier-name">Free Plan</div>
+          <div class="text-xs text-gray-500" id="advisor-tier-desc">50 AI credits / month</div>
+        </div>
+        <span id="advisor-tier-badge" class="px-2 py-1 rounded-full text-xs font-bold text-white bg-gray-400">FREE</span>
+      </div>
+      <div id="upgrade-buttons" class="space-y-2">
+        <button onclick="upgradeTier('pro')" class="w-full py-3 rounded-2xl text-sm font-semibold text-white" style="background:linear-gradient(135deg,#1d4ed8,#6d28d9)">
+          Upgrade to Pro — $9.99/mo
+          <span class="block text-xs opacity-80 font-normal">Unlimited AI · Cloud sync · Priority support</span>
+        </button>
+        <button onclick="upgradeTier('advisor')" class="w-full py-3 rounded-2xl border-2 border-purple-600 text-sm font-semibold text-purple-700">
+          Upgrade to Advisor — $49.99/mo
+          <span class="block text-xs font-normal text-purple-500">Everything in Pro · 10 client seats · Advisor dashboard · SEC audit logs</span>
+        </button>
+      </div>
+      <!-- Pro/Advisor current plan info -->
+      <div id="current-plan-info" style="display:none" class="space-y-2">
+        <div class="flex items-center justify-between text-sm">
+          <span class="text-gray-600">Seats used</span>
+          <span class="font-bold text-gray-900" id="seats-used-display">— / —</span>
+        </div>
+        <div class="flex items-center justify-between text-sm">
+          <span class="text-gray-600">Subscription status</span>
+          <span class="font-bold text-green-600" id="sub-status-display">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Client Roster -->
+    <div class="card p-4" id="advisor-clients-card" style="display:none">
+      <div class="flex items-center justify-between mb-3">
+        <div class="section-label" style="margin-bottom:0">Clients</div>
+        <button onclick="addAdvisorClient()" class="btn btn-primary btn-sm" style="width:auto">+ Add Client</button>
+      </div>
+      <div id="advisor-client-list">
+        <div class="text-sm text-gray-400 text-center py-4">No clients yet. Add your first client above.</div>
+      </div>
+      <div class="mt-3 text-xs text-gray-400 text-center" id="advisor-seats-label"></div>
+    </div>
+
+    <!-- Push Notification Settings -->
+    <div class="card p-4">
+      <div class="section-label">Notifications</div>
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-sm font-semibold text-gray-800">Price alert push notifications</div>
+          <div class="text-xs text-gray-500">Get notified when your price alerts trigger</div>
+        </div>
+        <button id="push-toggle-btn" onclick="togglePushNotifications()" class="relative inline-flex h-6 w-11 items-center rounded-full bg-gray-200 transition-colors">
+          <span id="push-toggle-knob" class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform translate-x-1"></span>
+        </button>
+      </div>
+    </div>
+
   </div>
 
 </div>
@@ -786,6 +864,9 @@ if(SUPABASE_URL !== 'https://YOUR_PROJECT.supabase.co' && typeof supabase !== 'u
   _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 }
 
+// Post-auth hook array — Phase 2+ code registers additional auth handlers here
+const _postAuthHooks = [];
+
 // ── DB Data Layer ──────────────────────────────────────
 // Routes reads/writes to Supabase when authenticated, falls back to localStorage
 const DB = {
@@ -910,6 +991,8 @@ async function onAuthStateChange(session){
     setSyncStatus('synced');
   }
   updateAuthUI();
+  // Run any phase-specific post-auth hooks registered later in the script
+  for(const hook of _postAuthHooks){ await hook(session).catch(e=>console.warn('[MSA] post-auth hook error:',e)); }
 }
 
 // Migrate existing localStorage data into the user's Supabase account on first sign-in
@@ -2731,6 +2814,256 @@ initSupabaseAuth();
 
 // Show onboarding for first-time visitors
 if(!localStorage.getItem('msa_onboarded') && !apiKey && !geminiKey) setTimeout(showOnboarding, 1200);
+
+// ══════════════════════════════════════════════════════
+// PHASE 2: MULTI-PORTFOLIO, BILLING, ADVISOR, PUSH
+// ══════════════════════════════════════════════════════
+
+// ── Portfolio Selector ──────────────────────────────────
+
+let _allPortfolios = []; // [{id, name, is_default}]
+
+async function loadPortfolios(){
+  if(!_supabase || !_supabaseUser) return;
+  const {data} = await _supabase.from('portfolios').select('id,name,is_default').eq('owner_id',_supabaseUser.id).order('sort_order');
+  if(!data) return;
+  _allPortfolios = data;
+  const sel = document.getElementById('portfolio-selector');
+  const card = document.getElementById('portfolio-selector-card');
+  if(!sel || !card) return;
+  sel.innerHTML = data.map(p=>`<option value="${p.id}" ${p.id===_activePortfolioId?'selected':''}>${esc(p.name)}</option>`).join('');
+  card.style.display = '';
+}
+
+async function switchPortfolio(portfolioId){
+  if(!_supabase || !_supabaseUser) return;
+  _activePortfolioId = portfolioId;
+  setSyncStatus('syncing');
+  portfolio = await DB.getPortfolio();
+  savePortfolio();
+  renderPortfolio();
+  setSyncStatus('synced');
+}
+
+async function createNewPortfolio(){
+  if(!_supabaseUser){ toast('Sign in to create multiple portfolios'); return; }
+  const name = prompt('Portfolio name:');
+  if(!name?.trim()) return;
+  const {data,error} = await _supabase.from('portfolios').insert({owner_id:_supabaseUser.id, name:name.trim(), sort_order:_allPortfolios.length}).select().single();
+  if(error){ toast('Error: '+error.message); return; }
+  toast(`Portfolio "${name}" created`);
+  await loadPortfolios();
+}
+
+async function sharePortfolio(){
+  if(!_supabaseUser){ toast('Sign in to share portfolios'); return; }
+  if(!_activePortfolioId){ toast('No portfolio selected'); return; }
+  const email = prompt('Enter collaborator email:');
+  if(!email?.trim()) return;
+  const role = confirm('Allow editing? OK = Editor, Cancel = Viewer') ? 'editor' : 'viewer';
+  const resp = await fetch(`${SUPABASE_URL}/functions/v1/advisor-invite`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':`Bearer ${_supabaseSession?.access_token}`,'apikey':SUPABASE_ANON},
+    body:JSON.stringify({action:'invite',portfolioId:_activePortfolioId,email:email.trim(),role})
+  });
+  const data = await resp.json();
+  if(data.error){ toast('Error: '+data.error); return; }
+  toast(`Invite sent to ${email}! Link: ${location.origin}${location.pathname}${data.inviteLink}`);
+}
+
+// ── Feature gate ────────────────────────────────────────
+
+function requireTier(minTier){
+  const tiers = {free:0,pro:1,advisor:2};
+  const userTier = _supabaseUser?.user_metadata?.subscription_tier || 'free';
+  if((tiers[userTier]??0) < (tiers[minTier]??0)){
+    showUpgradeModal(minTier);
+    return false;
+  }
+  return true;
+}
+
+function showUpgradeModal(tier){
+  const label = {pro:'Pro ($9.99/mo)',advisor:'Advisor ($49.99/mo)'}[tier]||tier;
+  if(confirm(`This feature requires the ${label} plan. Upgrade now?`)){
+    switchTab('advisor', document.getElementById('tab-btn-advisor'));
+  }
+}
+
+async function upgradeTier(tier){
+  if(!_supabaseUser){ toast('Sign in first'); openAuthModal(); return; }
+  if(!_supabaseSession){ toast('Session expired — please sign in again'); return; }
+  const resp = await fetch(`${SUPABASE_URL}/functions/v1/create-checkout`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':`Bearer ${_supabaseSession.access_token}`,'apikey':SUPABASE_ANON},
+    body:JSON.stringify({tier, successUrl:location.href+'?checkout=success', cancelUrl:location.href})
+  });
+  const data = await resp.json();
+  if(data.error){ toast('Billing error: '+data.error); return; }
+  location.href = data.url; // Redirect to Stripe Checkout
+}
+
+// ── Advisor Dashboard ────────────────────────────────────
+
+async function loadAdvisorDashboard(){
+  if(!_supabaseUser) return;
+  const tier = _supabaseUser.user_metadata?.subscription_tier || 'free';
+  const accountType = _supabaseUser.user_metadata?.account_type || 'retail';
+
+  // Show/hide advisor tab button
+  const advisorTabBtn = document.getElementById('tab-btn-advisor');
+  if(advisorTabBtn) advisorTabBtn.style.display = (accountType === 'advisor') ? '' : 'none';
+
+  // Update billing card
+  const tierColors = {free:'bg-gray-400',pro:'bg-blue-600',advisor:'bg-purple-600'};
+  const tierBadge = document.getElementById('advisor-tier-badge');
+  const tierName = document.getElementById('advisor-tier-name');
+  const tierDesc = document.getElementById('advisor-tier-desc');
+  const upgradeButtons = document.getElementById('upgrade-buttons');
+  const currentPlanInfo = document.getElementById('current-plan-info');
+  const clientsCard = document.getElementById('advisor-clients-card');
+
+  if(tierBadge) { tierBadge.textContent = tier.toUpperCase(); tierBadge.className = `px-2 py-1 rounded-full text-xs font-bold text-white ${tierColors[tier]||'bg-gray-400'}`; }
+  if(tierName) tierName.textContent = {free:'Free Plan',pro:'Pro Plan',advisor:'Advisor Plan'}[tier]||tier;
+  if(tierDesc) tierDesc.textContent = {free:'50 AI credits / month',pro:'Unlimited AI · Cloud sync',advisor:'Unlimited AI · 10 client seats · Audit logs'}[tier]||'';
+
+  if(tier === 'free'){
+    if(upgradeButtons) upgradeButtons.style.display = '';
+    if(currentPlanInfo) currentPlanInfo.style.display = 'none';
+    if(clientsCard) clientsCard.style.display = 'none';
+  } else {
+    if(upgradeButtons) upgradeButtons.style.display = 'none';
+    if(currentPlanInfo) currentPlanInfo.style.display = '';
+    const subStatus = document.getElementById('sub-status-display');
+    if(subStatus) subStatus.textContent = _supabaseUser.user_metadata?.subscription_status || 'active';
+  }
+
+  if(accountType === 'advisor' && tier === 'advisor'){
+    if(clientsCard) clientsCard.style.display = '';
+    await loadAdvisorClients();
+  }
+}
+
+async function loadAdvisorClients(){
+  if(!_supabase || !_supabaseUser) return;
+  const {data:clients} = await _supabase.from('advisor_clients').select('*').eq('advisor_id',_supabaseUser.id).order('seat_number');
+  const {data:profile} = await _supabase.from('profiles').select('advisor_seat_limit').eq('id',_supabaseUser.id).single();
+  const limit = profile?.advisor_seat_limit || 10;
+  const used = (clients||[]).length;
+
+  const listEl = document.getElementById('advisor-client-list');
+  const seatsLabel = document.getElementById('advisor-seats-label');
+  if(seatsLabel) seatsLabel.textContent = `${used} / ${limit} seats used`;
+
+  if(!listEl) return;
+  if(!clients?.length){
+    listEl.innerHTML = '<div class="text-sm text-gray-400 text-center py-4">No clients yet.</div>';
+    return;
+  }
+  listEl.innerHTML = clients.map(c=>`
+    <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+      <div>
+        <div class="font-semibold text-gray-800 text-sm">${esc(c.client_name||c.client_email||'Client '+c.seat_number)}</div>
+        <div class="text-xs text-gray-400">${esc(c.client_email||'')}</div>
+      </div>
+      <div class="text-xs text-gray-400">Seat #${c.seat_number}</div>
+    </div>
+  `).join('');
+}
+
+async function addAdvisorClient(){
+  if(!requireTier('advisor')) return;
+  const name = prompt('Client name:');
+  if(!name?.trim()) return;
+  const email = prompt('Client email (optional):') || '';
+  const {data:profile} = await _supabase.from('profiles').select('advisor_seat_limit').eq('id',_supabaseUser.id).single();
+  const {data:existing} = await _supabase.from('advisor_clients').select('seat_number').eq('advisor_id',_supabaseUser.id).order('seat_number',{ascending:false}).limit(1);
+  const nextSeat = (existing?.[0]?.seat_number || 0) + 1;
+  const limit = profile?.advisor_seat_limit || 10;
+  if(nextSeat > limit){ toast(`Seat limit (${limit}) reached. Upgrade for more seats.`); return; }
+  const {error} = await _supabase.from('advisor_clients').insert({advisor_id:_supabaseUser.id, client_name:name.trim(), client_email:email.trim()||null, seat_number:nextSeat});
+  if(error){ toast('Error: '+error.message); return; }
+  toast(`Client "${name}" added (Seat #${nextSeat})`);
+  await loadAdvisorClients();
+}
+
+// ── Push Notifications ───────────────────────────────────
+
+let _pushEnabled = false;
+
+async function togglePushNotifications(){
+  if(!_supabaseUser){ toast('Sign in to enable push notifications'); return; }
+  const knob = document.getElementById('push-toggle-knob');
+  const btn = document.getElementById('push-toggle-btn');
+  if(_pushEnabled){
+    // Disable push
+    await _supabase.from('notification_preferences').upsert({user_id:_supabaseUser.id, push_enabled:false, push_subscription:null},{onConflict:'user_id'});
+    _pushEnabled = false;
+    if(btn) btn.style.background = '#e5e7eb';
+    if(knob) knob.style.transform = 'translateX(4px)';
+    toast('Push notifications disabled');
+  } else {
+    // Request permission and subscribe
+    if(!('Notification' in window)){ toast('Push notifications not supported in this browser'); return; }
+    const permission = await Notification.requestPermission();
+    if(permission !== 'granted'){ toast('Notification permission denied'); return; }
+    try{
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY_PLACEHOLDER)
+      });
+      await _supabase.from('notification_preferences').upsert({user_id:_supabaseUser.id, push_enabled:true, push_subscription:sub.toJSON()},{onConflict:'user_id'});
+      _pushEnabled = true;
+      if(btn) btn.style.background = '#7c3aed';
+      if(knob) knob.style.transform = 'translateX(24px)';
+      toast('Push notifications enabled');
+    } catch(err){ toast('Push subscription failed: '+err.message); }
+  }
+}
+
+// VAPID public key placeholder — replace with actual key from .env
+const VAPID_PUBLIC_KEY_PLACEHOLDER = localStorage.getItem('msa_vapid_pub') || '';
+
+function urlBase64ToUint8Array(base64String){
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g,'+').replace(/_/g,'/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(c=>c.charCodeAt(0)));
+}
+
+// Accept portfolio invite from URL token (called on page load)
+async function checkInviteToken(){
+  const params = new URLSearchParams(location.search);
+  const inviteToken = params.get('invite');
+  if(!inviteToken) return;
+  if(!_supabaseUser){ toast('Sign in to accept the portfolio invite'); openAuthModal(); return; }
+  const resp = await fetch(`${SUPABASE_URL}/functions/v1/advisor-invite`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':`Bearer ${_supabaseSession?.access_token}`,'apikey':SUPABASE_ANON},
+    body:JSON.stringify({action:'accept',token:inviteToken})
+  });
+  const data = await resp.json();
+  if(data.error){ toast('Invite error: '+data.error); return; }
+  toast(`Portfolio access granted (${data.role})!`);
+  // Remove token from URL
+  history.replaceState({}, '', location.pathname);
+  await loadPortfolios();
+}
+
+// Hook Phase 2 post-auth work via the _postAuthHooks array (Phase 1 reads this in onAuthStateChange)
+_postAuthHooks.push(async (session) => {
+  if(session){
+    await loadPortfolios();
+    await loadAdvisorDashboard();
+    await checkInviteToken();
+  } else {
+    const card = document.getElementById('portfolio-selector-card');
+    if(card) card.style.display = 'none';
+    const advisorTabBtn = document.getElementById('tab-btn-advisor');
+    if(advisorTabBtn) advisorTabBtn.style.display = 'none';
+  }
+});
 </script>
 </body>
 </html>

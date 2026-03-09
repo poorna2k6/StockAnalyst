@@ -479,7 +479,32 @@
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.347.347a3.75 3.75 0 01-5.303 0l-.347-.347z"/></svg>
         Analyze My Portfolio with AI
       </button>
+      <!-- Phase 3: Generate PDF Report button (shown when authenticated) -->
+      <button id="p-generate-report-btn" onclick="generatePortfolioReport()" style="display:none" class="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-purple-200 text-sm font-semibold text-purple-700 mt-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+        Generate PDF Report
+      </button>
       <div id="p-analysis" class="mt-3"></div>
+    </div>
+
+    <!-- Phase 3: Performance Chart (shown when snapshot data is available) -->
+    <div id="p-performance-card" class="card p-4" style="display:none">
+      <div class="flex items-center justify-between mb-3">
+        <div class="section-label" style="margin-bottom:0">Performance</div>
+        <div class="flex gap-2">
+          <button onclick="loadPerformanceChart(30)" class="text-xs font-semibold px-2 py-1 rounded-lg" id="perf-btn-30" style="background:#ede9fe;color:#6d28d9">30d</button>
+          <button onclick="loadPerformanceChart(90)" class="text-xs font-semibold px-2 py-1 rounded-lg text-gray-500" id="perf-btn-90" style="background:#f3f4f6">90d</button>
+          <button onclick="loadPerformanceChart(365)" class="text-xs font-semibold px-2 py-1 rounded-lg text-gray-500" id="perf-btn-365" style="background:#f3f4f6">1y</button>
+        </div>
+      </div>
+      <div id="p-performance-chart" style="height:160px;position:relative;overflow:hidden">
+        <svg id="perf-svg" width="100%" height="160" viewBox="0 0 400 160" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="flex justify-between text-xs text-gray-400 mt-1">
+        <span id="perf-start-label"></span>
+        <span id="perf-return-label" class="font-semibold"></span>
+        <span id="perf-end-label"></span>
+      </div>
     </div>
   </div>
 </div>
@@ -800,6 +825,25 @@
         <div class="flex items-center gap-1.5 bg-gray-50 rounded-lg p-2">📷 Screenshot import</div>
         <div class="flex items-center gap-1.5 bg-gray-50 rounded-lg p-2">🤖 Claude + Gemini AI</div>
         <div class="flex items-center gap-1.5 bg-gray-50 rounded-lg p-2">📱 PWA installable</div>
+      </div>
+    </div>
+
+    <!-- Phase 3: GDPR Data Management (shown when authenticated) -->
+    <div id="settings-gdpr-section" style="display:none">
+      <div class="border-t border-gray-100 pt-4">
+        <div class="section-label">Data &amp; Privacy</div>
+        <div class="space-y-2">
+          <button onclick="exportMyData()" class="w-full text-left flex items-center gap-3 bg-gray-50 rounded-2xl p-3 text-sm font-semibold text-gray-700">
+            <span class="text-lg">⬇</span>
+            Export My Data (GDPR)
+            <span class="text-xs text-gray-400 font-normal ml-auto">JSON download</span>
+          </button>
+          <button onclick="deleteMyAccount()" class="w-full text-left flex items-center gap-3 bg-red-50 rounded-2xl p-3 text-sm font-semibold text-red-700">
+            <span class="text-lg">🗑</span>
+            Delete My Account
+            <span class="text-xs text-red-400 font-normal ml-auto">Irreversible</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -3062,6 +3106,216 @@ _postAuthHooks.push(async (session) => {
     if(card) card.style.display = 'none';
     const advisorTabBtn = document.getElementById('tab-btn-advisor');
     if(advisorTabBtn) advisorTabBtn.style.display = 'none';
+  }
+});
+
+// ══════════════════════════════════════════════════════
+// PHASE 3: PDF REPORTS, PERFORMANCE CHART, GDPR, WHITE-LABEL
+// ══════════════════════════════════════════════════════
+
+// ── PDF Report Generation ──────────────────────────────
+
+let _generatingReport = false;
+
+async function generatePortfolioReport(){
+  if(!_supabaseUser){ toast('Sign in to generate reports'); return; }
+  if(!_activePortfolioId){ toast('No portfolio selected'); return; }
+  if(_generatingReport){ toast('Report already generating…'); return; }
+  if(!requireTier('pro')) return; // Phase 2 gate
+
+  _generatingReport = true;
+  const btn = document.getElementById('p-generate-report-btn');
+  if(btn) btn.textContent = '⏳ Generating…';
+
+  try{
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/generate-report`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${_supabaseSession?.access_token}`,'apikey':SUPABASE_ANON},
+      body:JSON.stringify({portfolioId:_activePortfolioId, reportType:'summary'})
+    });
+    const data = await resp.json();
+    if(data.error){ toast('Report error: '+data.error); return; }
+    if(data.url){
+      window.open(data.url, '_blank');
+      toast('PDF report ready!');
+    }
+  } catch(err){ toast('Failed to generate report: '+String(err)); }
+  finally{
+    _generatingReport = false;
+    if(btn) btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg> Generate PDF Report';
+  }
+}
+
+// ── Performance Chart ──────────────────────────────────
+
+let _perfDays = 30;
+
+async function loadPerformanceChart(days){
+  if(!_supabase || !_supabaseUser || !_activePortfolioId) return;
+  _perfDays = days;
+
+  // Update button styles
+  [30,90,365].forEach(d=>{
+    const btn = document.getElementById(`perf-btn-${d}`);
+    if(btn){
+      btn.style.background = d===days ? '#ede9fe' : '#f3f4f6';
+      btn.style.color = d===days ? '#6d28d9' : '#6b7280';
+    }
+  });
+
+  const since = new Date(Date.now() - days*24*60*60*1000).toISOString().split('T')[0];
+  const {data:snapshots} = await _supabase.from('portfolio_snapshots')
+    .select('snapshot_date,total_value,benchmark_spy')
+    .eq('portfolio_id',_activePortfolioId)
+    .gte('snapshot_date', since)
+    .order('snapshot_date');
+
+  const card = document.getElementById('p-performance-card');
+  if(!snapshots?.length){ if(card) card.style.display='none'; return; }
+  if(card) card.style.display='';
+
+  renderPerformanceSVG(snapshots);
+}
+
+function renderPerformanceSVG(snapshots){
+  const svg = document.getElementById('perf-svg');
+  if(!svg) return;
+  const W=400, H=160, padX=0, padY=10;
+
+  const values = snapshots.map(s=>s.total_value||0);
+  const spyValues = snapshots.map(s=>s.benchmark_spy||null);
+  const minV = Math.min(...values);
+  const maxV = Math.max(...values);
+  const range = maxV-minV || 1;
+
+  const toX = (i) => padX + (i/(snapshots.length-1||1))*(W-padX*2);
+  const toY = (v) => H-padY - ((v-minV)/range)*(H-padY*2);
+
+  // Portfolio line
+  const portPoints = values.map((v,i)=>`${toX(i)},${toY(v)}`).join(' ');
+  const portArea = `${toX(0)},${H} ` + portPoints + ` ${toX(values.length-1)},${H}`;
+
+  // SPY benchmark line (normalized to portfolio start value)
+  let spyPath = '';
+  const validSpy = spyValues.filter(Boolean);
+  if(validSpy.length >= 2){
+    const spyStart = spyValues.find(Boolean);
+    const portStart = values[0];
+    const spyNorm = spyValues.map(v=>v ? portStart * (v/spyStart) : null);
+    const spyPoints = spyNorm.map((v,i)=>v!==null?`${toX(i)},${toY(v)}`:null).filter(Boolean);
+    spyPath = `<polyline points="${spyPoints.join(' ')}" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4,2" opacity="0.7"/>`;
+  }
+
+  const returnPct = values.length>=2 ? ((values[values.length-1]-values[0])/values[0]*100).toFixed(1) : '0';
+  const isPositive = parseFloat(returnPct) >= 0;
+
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="perf-grad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${isPositive?'#6d28d9':'#ef4444'}" stop-opacity="0.2"/>
+        <stop offset="100%" stop-color="${isPositive?'#6d28d9':'#ef4444'}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <polygon points="${portArea}" fill="url(#perf-grad)"/>
+    <polyline points="${portPoints}" fill="none" stroke="${isPositive?'#7c3aed':'#ef4444'}" stroke-width="2.5" stroke-linejoin="round"/>
+    ${spyPath}
+  `;
+
+  const startLabel = document.getElementById('perf-start-label');
+  const endLabel = document.getElementById('perf-end-label');
+  const returnLabel = document.getElementById('perf-return-label');
+  if(startLabel) startLabel.textContent = snapshots[0].snapshot_date;
+  if(endLabel) endLabel.textContent = snapshots[snapshots.length-1].snapshot_date;
+  if(returnLabel){ returnLabel.textContent = `${isPositive?'+':''}${returnPct}%`; returnLabel.style.color = isPositive?'#7c3aed':'#ef4444'; }
+}
+
+// ── GDPR Functions ─────────────────────────────────────
+
+async function exportMyData(){
+  if(!_supabaseUser){ toast('Sign in to export your data'); return; }
+  toast('Preparing your data export…');
+  try{
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/data-export`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${_supabaseSession?.access_token}`,'apikey':SUPABASE_ANON},
+      body:'{}'
+    });
+    const data = await resp.json();
+    if(data.error){ toast('Export error: '+data.error); return; }
+    if(data.url){
+      const a=document.createElement('a'); a.href=data.url; a.download='my-stockanalyst-data.json';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      toast('Data export downloaded!');
+    }
+  } catch(err){ toast('Export failed: '+String(err)); }
+}
+
+async function deleteMyAccount(){
+  if(!_supabaseUser){ toast('Sign in first'); return; }
+  const confirmed1 = confirm('⚠️ This will permanently delete your account and ALL your data.\n\nThis cannot be undone. Are you sure?');
+  if(!confirmed1) return;
+  const typedConfirmation = prompt('Type "DELETE MY ACCOUNT" to confirm:');
+  if(typedConfirmation !== 'DELETE MY ACCOUNT'){ toast('Account deletion cancelled'); return; }
+
+  toast('Deleting your account…');
+  try{
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/delete-account`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${_supabaseSession?.access_token}`,'apikey':SUPABASE_ANON},
+      body:JSON.stringify({confirmation:'DELETE MY ACCOUNT'})
+    });
+    const data = await resp.json();
+    if(data.error){ toast('Delete error: '+data.error); return; }
+    // Clear all local state
+    ['msa_portfolio','msa_watchlist','msa_alerts','msa_key','msa_gemini','msa_onboarded','msa_name'].forEach(k=>localStorage.removeItem(k));
+    portfolio={};watchlist=[];alerts={};
+    toast('Your account has been deleted. Goodbye!');
+    closeSettings();
+    setTimeout(()=>location.reload(), 2000);
+  } catch(err){ toast('Delete failed: '+String(err)); }
+}
+
+// ── White-label branding (advisor accounts) ────────────
+
+async function applyAdvisorBranding(){
+  if(!_supabase || !_supabaseUser) return;
+  const userMeta = _supabaseUser.user_metadata;
+  if(userMeta?.account_type !== 'advisor') return;
+
+  const {data:branding} = await _supabase.from('advisor_branding').select('*').eq('advisor_id',_supabaseUser.id).single();
+  if(!branding) return;
+
+  if(branding.primary_color){
+    document.documentElement.style.setProperty('--brand-primary', branding.primary_color);
+    // Dynamically update the meta theme-color
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if(metaTheme) metaTheme.setAttribute('content', branding.primary_color);
+  }
+  if(branding.firm_name){
+    const titleEl = document.querySelector('.font-bold.text-gray-900.text-sm');
+    if(titleEl) titleEl.textContent = branding.firm_name;
+    document.title = branding.firm_name;
+  }
+}
+
+// ── Phase 3 post-auth hook ─────────────────────────────
+
+_postAuthHooks.push(async (session) => {
+  if(session){
+    // Show PDF report button and GDPR section
+    const reportBtn = document.getElementById('p-generate-report-btn');
+    if(reportBtn) reportBtn.style.display = '';
+    const gdprSection = document.getElementById('settings-gdpr-section');
+    if(gdprSection) gdprSection.style.display = '';
+    // Apply advisor branding
+    await applyAdvisorBranding();
+    // Load performance chart
+    if(_activePortfolioId) await loadPerformanceChart(30);
+  } else {
+    const reportBtn = document.getElementById('p-generate-report-btn');
+    if(reportBtn) reportBtn.style.display = 'none';
+    const gdprSection = document.getElementById('settings-gdpr-section');
+    if(gdprSection) gdprSection.style.display = 'none';
   }
 });
 </script>

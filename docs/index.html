@@ -769,6 +769,23 @@ const UNIVERSE = {
 // ══════════════════════════════════════════════════════
 // UTILITIES
 // ══════════════════════════════════════════════════════
+
+// ── Modal helpers (Fix 0) ──
+function openModal(id, firstFocusSelector) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = 'flex';
+  el.setAttribute('aria-hidden', 'false');
+  const target = firstFocusSelector ? el.querySelector(firstFocusSelector) : el.querySelector('button, [href], input');
+  if (target) target.focus();
+}
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = 'none';
+  el.setAttribute('aria-hidden', 'true');
+}
+
 function esc(s){ const d=document.createElement('div'); d.textContent=s??''; return d.innerHTML; }
 function fmt(n, dec=2){ return n==null?'–':'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec}); }
 function fmtN(n, dec=2){ return (n==null||isNaN(n))?'–':(n>=0?'+':'')+n.toFixed(dec)+'%'; }
@@ -793,9 +810,9 @@ function openSettings(){
   document.getElementById('settings-name').value = userName;
   const bi = document.getElementById('settings-build');
   if(bi) bi.textContent = 'Build ' + BUILD;
-  document.getElementById('settings-modal').classList.add('open');
+  openModal('settings-modal');
 }
-function closeSettings(){ document.getElementById('settings-modal').classList.remove('open'); }
+function closeSettings(){ closeModal('settings-modal'); }
 function saveSettings(){
   apiKey = document.getElementById('settings-key').value.trim();
   geminiKey = document.getElementById('settings-gemini-key').value.trim();
@@ -2302,12 +2319,10 @@ function shareApp(){
 // FIRST-RUN ONBOARDING
 // ══════════════════════════════════════════════════════
 function showOnboarding(){
-  const el = document.getElementById('onboarding-modal');
-  if(el) el.style.display = 'flex';
+  openModal('onboarding-modal');
 }
 function closeOnboarding(){
-  const el = document.getElementById('onboarding-modal');
-  if(el) el.style.display = 'none';
+  closeModal('onboarding-modal');
   localStorage.setItem('msa_onboarded', '1');
 }
 function onboardingFinish(){

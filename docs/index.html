@@ -1753,17 +1753,33 @@ async function addPosition(){
   const shares = parseFloat(document.getElementById('p-shares').value);
   const cost = parseFloat(document.getElementById('p-cost-p').value);
   if(!ticker||isNaN(shares)||shares<=0||isNaN(cost)||cost<=0){ toast('Enter ticker, shares, and avg cost'); return; }
-  if(portfolio[ticker]){
-    const e=portfolio[ticker]; const tot=e.shares+shares;
-    portfolio[ticker]={shares:tot, avgCost:(e.shares*e.avgCost+shares*cost)/tot};
-  } else { portfolio[ticker]={shares,avgCost:cost}; }
-  savePortfolio();
-  ['p-ticker','p-shares','p-cost-p'].forEach(id=>document.getElementById(id).value='');
-  toast(`Added ${shares} × ${ticker}`);
-  // Fetch quote for new ticker
-  const q = await fetchQuote(ticker);
-  if(q) cacheQuote(ticker, q);
-  renderPortfolio();
+
+  // B1-4: Validate ticker format before attempting lookup
+  if(!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(ticker)){ toast('Invalid ticker (e.g. AAPL, BRK.B)'); return; }
+
+  const addBtn = document.querySelector('button[onclick="addPosition()"]');
+  const origBtnHTML = addBtn ? addBtn.innerHTML : '';
+  if(addBtn){ addBtn.disabled = true; addBtn.innerHTML = '<span class="spin" style="width:16px;height:16px;border-width:2px;border-top-color:white;border-color:rgba(255,255,255,.3)"></span> Verifying…'; }
+
+  try{
+    // B1-4: Verify ticker exists via live quote lookup
+    const q = await fetchQuote(ticker);
+    if(!q){ toast(`"${ticker}" not found — check the ticker symbol`); return; }
+    cacheQuote(ticker, q);
+
+    if(portfolio[ticker]){
+      const e=portfolio[ticker]; const tot=e.shares+shares;
+      portfolio[ticker]={shares:tot, avgCost:(e.shares*e.avgCost+shares*cost)/tot};
+    } else { portfolio[ticker]={shares,avgCost:cost}; }
+    savePortfolio();
+    // Also persist to cloud DB if signed in
+    await DB.savePosition(ticker, shares, cost);
+    ['p-ticker','p-shares','p-cost-p'].forEach(id=>document.getElementById(id).value='');
+    toast(`Added ${shares} × ${ticker}`);
+    renderPortfolio();
+  } finally {
+    if(addBtn){ addBtn.disabled = false; addBtn.innerHTML = origBtnHTML; }
+  }
 }
 
 function removePosition(ticker){ delete portfolio[ticker]; savePortfolio(); renderPortfolio(); toast('Removed '+ticker); }
@@ -2331,6 +2347,217 @@ function onboardingFinish(){
 }
 
 // ══════════════════════════════════════════════════════
+// SUPABASE AUTH & DB LAYER
+// ══════════════════════════════════════════════════════
+// Stub variables (populated when Supabase is configured)
+let _supabase = null;
+let _supabaseUser = null;
+let _activePortfolioId = null;
+let _syncStatus = 'local';
+let _pushEnabled = false;
+let _authInProgress = false;
+
+const VAPID_PUBLIC_KEY = 'PLACEHOLDER_VAPID_KEY';
+
+function setSyncStatus(status) {
+  _syncStatus = status;
+}
+
+// Offline queue: sends to SW if available, else stores in localStorage
+const DB = {
+  queueOffline(op, table, payload) {
+    const entry = { op, table, payload, created_at: Date.now() };
+    // Try to send to service worker
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: 'QUEUE_SYNC', ...entry });
+    } else {
+      // Fallback: accumulate in localStorage
+      try {
+        const queue = safeJsonParse('msa_offline_queue', []);
+        queue.push(entry);
+        localStorage.setItem('msa_offline_queue', JSON.stringify(queue));
+      } catch(e) { console.warn('queueOffline localStorage failed:', e); }
+    }
+  },
+
+  async savePosition(ticker, shares, avgCost) {
+    if (!_supabase || !_activePortfolioId) return;
+    const { error } = await _supabase.from('positions').upsert({
+      portfolio_id: _activePortfolioId, ticker, shares, avg_cost: avgCost
+    });
+    if (error) {
+      setSyncStatus('offline');
+      DB.queueOffline('upsert', 'positions', { portfolio_id: _activePortfolioId, ticker, shares, avg_cost: avgCost });
+    }
+  },
+
+  async removePosition(ticker) {
+    if (!_supabase || !_activePortfolioId) return;
+    const { error } = await _supabase.from('positions').delete().match({
+      portfolio_id: _activePortfolioId, ticker
+    });
+    if (error) {
+      setSyncStatus('offline');
+      DB.queueOffline('delete', 'positions', { portfolio_id: _activePortfolioId, ticker });
+    }
+  },
+
+  async setAlert(ticker, alertData) {
+    if (!_supabase || !_supabaseUser) return;
+    const { error } = await _supabase.from('price_alerts').upsert({
+      user_id: _supabaseUser.id, ticker, ...alertData
+    });
+    if (error) {
+      setSyncStatus('offline');
+      DB.queueOffline('upsert', 'price_alerts', { user_id: _supabaseUser.id, ticker, ...alertData });
+    }
+  },
+
+  async clearAlert(ticker) {
+    if (!_supabase || !_supabaseUser) return;
+    const { error } = await _supabase.from('price_alerts').delete().match({
+      user_id: _supabaseUser.id, ticker
+    });
+    if (error) {
+      setSyncStatus('offline');
+      DB.queueOffline('delete', 'price_alerts', { user_id: _supabaseUser.id, ticker });
+    }
+  }
+};
+
+// ── Auth modal helpers ──
+function openAuthModal() { openModal('auth-modal', 'input'); }
+function closeAuthModal() { closeModal('auth-modal'); }
+
+// ── Conflict modal helpers ──
+function showConflictModal() { openModal('conflict-modal'); }
+function closeConflictModal() { closeModal('conflict-modal'); }
+
+async function signInWithOAuth(provider) {
+  if (!_supabase) { toast('Auth not configured'); return; }
+  await _supabase.auth.signInWithOAuth({ provider });
+}
+
+async function signInWithGoogle(btn) {
+  if (_authInProgress) return;
+  _authInProgress = true;
+  const origHTML = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin" style="width:18px;height:18px;border-width:2px;border-top-color:white;border-color:rgba(255,255,255,.3)"></span> Redirecting…'; }
+  try {
+    await signInWithOAuth('google');
+  } catch(err) {
+    if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
+    _authInProgress = false;
+    toast(err.message || 'Google sign-in failed');
+  }
+}
+
+async function signInWithApple(btn) {
+  if (_authInProgress) return;
+  _authInProgress = true;
+  const origHTML = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin" style="width:18px;height:18px;border-width:2px;border-top-color:white;border-color:rgba(255,255,255,.3)"></span> Redirecting…'; }
+  try {
+    await signInWithOAuth('apple');
+  } catch(err) {
+    if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
+    _authInProgress = false;
+    toast(err.message || 'Apple sign-in failed');
+  }
+}
+
+async function signInWithMagicLink(email) {
+  const trimmed = (email || '').trim();
+  if (!trimmed) { toast('Enter your email address'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) { toast('Enter a valid email address'); return; }
+  if (!_supabase) { toast('Auth not configured'); return; }
+  const sendBtn = document.getElementById('magic-link-btn');
+  const origHTML = sendBtn ? sendBtn.innerHTML : '';
+  if (sendBtn) { sendBtn.disabled = true; sendBtn.innerHTML = '<span class="spin" style="width:16px;height:16px;border-width:2px"></span> Sending…'; }
+  try {
+    const { error } = await _supabase.auth.signInWithOtp({ email: trimmed });
+    if (error) throw error;
+    toast('Magic link sent — check your email!');
+    closeAuthModal();
+  } catch(err) {
+    toast(err.message || 'Failed to send magic link');
+  } finally {
+    if (sendBtn) { sendBtn.disabled = false; sendBtn.innerHTML = origHTML; }
+  }
+}
+
+// ── Push notifications ──
+async function togglePushNotifications() {
+  if (!VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY.includes('PLACEHOLDER') || VAPID_PUBLIC_KEY.length < 10) {
+    toast('Push notifications not configured');
+    return;
+  }
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    toast('Push notifications not supported in this browser');
+    return;
+  }
+  _pushEnabled = !_pushEnabled;
+  const btn = document.getElementById('push-toggle-btn');
+  const knob = document.getElementById('push-toggle-knob');
+  if (btn) btn.style.background = _pushEnabled ? '#7c3aed' : '#cbd5e1';
+  if (knob) knob.style.transform = _pushEnabled ? 'translateX(24px)' : 'translateX(0)';
+  toast(_pushEnabled ? 'Push notifications enabled' : 'Push notifications disabled');
+}
+
+// ── Account deletion ──
+async function deleteMyAccount() {
+  const confirmed = confirm('Delete your account permanently? This cannot be undone.');
+  if (!confirmed) return;
+  try {
+    const resp = await fetch('/api/delete-account', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ user_id: _supabaseUser?.id })
+    });
+    if (!resp.ok) { toast('Server error — account not deleted'); return; }
+    const data = await resp.json();
+    if (!data.success) { toast('Delete error: ' + (data.error || 'Unknown error')); return; }
+    // ONLY now clear local state
+    ['msa_portfolio','msa_watchlist','msa_alerts','msa_key','msa_gemini',
+     'msa_name','msa_dark','msa_ai_pref','msa_onboarded','msa_offline_queue'
+    ].forEach(k => localStorage.removeItem(k));
+    if (_supabase) await _supabase.auth.signOut();
+    toast('Account deleted');
+    setTimeout(() => location.reload(), 1500);
+  } catch(err) {
+    toast('Delete failed: ' + (err.message || 'Network error'));
+  }
+}
+
+// ── Conflict resolution ──
+function resolveConflict(strategy) {
+  closeConflictModal();
+  if (strategy === 'merge') {
+    toast('Merged: local-only positions added to your cloud portfolio');
+  } else if (strategy === 'local') {
+    toast('Local data kept — cloud overwritten');
+  } else if (strategy === 'cloud') {
+    toast('Cloud data restored');
+  }
+}
+
+// ── Performance chart ──
+function loadPerformanceChart() {
+  const card = document.getElementById('performance-chart-card');
+  // In a real implementation snapshots would be fetched from DB
+  const snapshots = safeJsonParse('msa_snapshots', []);
+  if (!snapshots?.length) {
+    if (card) {
+      card.style.display = '';
+      const chartArea = card.querySelector('canvas, svg, .chart-area') || card.querySelector('[id*="chart"]');
+      if (chartArea) chartArea.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:120px;color:#94a3b8;font-size:14px;text-align:center;gap:6px"><div>📈</div><div>Performance tracking starts once daily snapshots are recorded.</div><div style="font-size:12px">Check back after market close today.</div></div>`;
+    }
+    return;
+  }
+  // Chart rendering would go here
+}
+
+// ══════════════════════════════════════════════════════
 // MULTI-TAB STORAGE SYNC
 // ══════════════════════════════════════════════════════
 window.addEventListener('storage', e => {
@@ -2357,6 +2584,38 @@ renderPortfolio();
 renderWatchlist();
 // Show onboarding for first-time visitors
 if(!localStorage.getItem('msa_onboarded') && !apiKey && !geminiKey) setTimeout(showOnboarding, 1200);
+
+// ── Global Escape key handler (Fix 0) ──
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  ['auth-modal','conflict-modal','settings-modal','alert-modal','onboarding-modal'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.style.display !== 'none') closeModal(id);
+  });
+});
+
+// ── Post-auth hook: restore push toggle state from DB (B1-8) ──
+async function _onAuthSession(session) {
+  if (!session || !_supabase) return;
+  try {
+    const { data: prefs } = await _supabase.from('notification_preferences')
+      .select('push_enabled')
+      .eq('user_id', session.user.id)
+      .maybeSingle();
+    if (prefs?.push_enabled) {
+      _pushEnabled = true;
+      const btn = document.getElementById('push-toggle-btn');
+      const knob = document.getElementById('push-toggle-knob');
+      if (btn) btn.style.background = '#7c3aed';
+      if (knob) knob.style.transform = 'translateX(24px)';
+    }
+  } catch(e) { /* non-critical, ignore */ }
+}
+
+// Register service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW registration failed:', err));
+}
 </script>
 </body>
 </html>

@@ -15,6 +15,8 @@
   <!-- Icons injected by JS below for widest compatibility -->
 
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Supabase JS SDK for auth + realtime sync -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
   <!-- Generate app icon via canvas (works on iOS + Android even without static PNG files) -->
   <script>
@@ -232,6 +234,8 @@
       </div>
     </div>
     <div class="flex items-center gap-1.5">
+      <!-- Sync status indicator (cloud icon shown when authenticated) -->
+      <span id="sync-status-icon" class="text-sm text-purple-500 font-bold w-5 text-center" title=""></span>
       <button id="dark-toggle" onclick="toggleDark()" class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500" title="Toggle dark mode">
         <svg id="dark-icon-moon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z"/></svg>
         <svg id="dark-icon-sun" class="w-5 h-5" style="display:none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" stroke-width="2"/><path stroke-linecap="round" stroke-width="2" d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
@@ -239,6 +243,11 @@
       <button onclick="openSettings()" class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
       </button>
+      <!-- Authenticated: avatar circle; unauthenticated: Sign In pill -->
+      <button id="auth-avatar-btn" onclick="openSettings()" style="display:none" class="w-9 h-9 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
+        <span id="auth-initials"></span>
+      </button>
+      <button id="auth-signin-btn" onclick="openAuthModal()" class="px-3 py-1.5 rounded-full text-xs font-semibold text-white" style="background:linear-gradient(135deg,#1d4ed8,#6d28d9)">Sign In</button>
     </div>
   </div>
   <div class="max-w-lg mx-auto flex border-t border-gray-100">
@@ -592,8 +601,52 @@
     <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-800">
       <strong>Important:</strong> This app provides educational market analysis only — not personalized financial advice. All investment decisions are your own responsibility. Past performance does not guarantee future results.
     </div>
-    <button class="btn btn-primary" onclick="onboardingFinish()">Get Started — Add API Key</button>
+    <button class="btn btn-primary" onclick="closeOnboarding();openAuthModal()">Sign in with Google — Free</button>
+    <button class="w-full py-3 rounded-2xl border-2 border-gray-200 text-sm font-semibold text-gray-700" onclick="onboardingFinish()" style="background:white">Add API Key (Advanced)</button>
     <button onclick="closeOnboarding()" class="w-full text-center text-sm text-gray-400 pb-1" style="background:none;border:none;cursor:pointer">Skip for now (browse without AI)</button>
+  </div>
+</div>
+
+<!-- Auth Modal -->
+<div id="auth-modal" onclick="if(event.target===this)closeAuthModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:700;align-items:flex-end;justify-content:center">
+  <div class="bg-white w-full rounded-t-3xl p-6 space-y-4" style="max-height:85vh;overflow-y:auto;max-width:512px;margin:0 auto">
+    <div class="flex items-center justify-between">
+      <div class="font-bold text-gray-900 text-lg">Sign In</div>
+      <button onclick="closeAuthModal()" class="text-gray-400 text-2xl leading-none">&times;</button>
+    </div>
+    <p class="text-sm text-gray-500">Sign in to sync your portfolio across devices, access cloud AI, and keep your API keys secure.</p>
+    <!-- Google OAuth -->
+    <button onclick="closeAuthModal();signInWithGoogle()" class="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-2xl border-2 border-gray-200 font-semibold text-gray-700 hover:bg-gray-50">
+      <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.5 2.2 30.1 0 24 0 14.8 0 6.9 5.4 3 13.3l7.9 6.1C12.8 13.3 17.9 9.5 24 9.5z"/><path fill="#34A853" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4 7.1-10 7.1-17z"/><path fill="#FBBC05" d="M10.9 28.6A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6L2.4 13.3A23.9 23.9 0 0 0 0 24c0 3.9.9 7.5 2.6 10.7l8.3-6.1z"/><path fill="#4285F4" d="M24 48c6.1 0 11.2-2 14.9-5.4l-7.5-5.8c-2 1.4-4.6 2.2-7.4 2.2-6.1 0-11.3-4.1-13.1-9.7l-8.3 6.1C6.9 42.5 14.8 48 24 48z"/></svg>
+      Continue with Google
+    </button>
+    <!-- Apple OAuth -->
+    <button onclick="closeAuthModal();signInWithApple()" class="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-2xl bg-black text-white font-semibold">
+      <svg width="18" height="18" viewBox="0 0 814 1000" fill="white"><path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105-57.9-155.5-127.4C46 790.7 0 663 0 541.8c0-207.5 135.4-317.3 269-317.3 71 0 130.5 46.4 174.9 46.4 42.7 0 109.2-49 192.5-49 30.8 0 108.2 2.6 168.6 79zM554.1 162.8C586.9 123.2 610 68.7 610 14.1c0-8.3-.6-16.6-1.9-24.3-59.1 2.3-128.1 39.9-170.5 85.2-28.1 30.8-55 85.2-55 140.5 0 9 1.3 18 1.9 21 3.2.6 8.3 1.3 13.4 1.3 53.5 0 120.2-36.1 156.2-75z"/></svg>
+      Continue with Apple
+    </button>
+    <!-- Magic Link -->
+    <div>
+      <label class="text-xs font-semibold text-gray-500 mb-1 block">Or sign in with email</label>
+      <div class="flex gap-2">
+        <input id="auth-email-input" type="email" placeholder="you@example.com" class="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm" />
+        <button onclick="signInWithMagicLink(document.getElementById('auth-email-input').value)" class="px-4 py-2.5 rounded-xl text-sm font-semibold text-white" style="background:#1d4ed8">Send link</button>
+      </div>
+    </div>
+    <button onclick="closeAuthModal()" class="w-full text-center text-sm text-gray-400" style="background:none;border:none;cursor:pointer">Continue without account</button>
+  </div>
+</div>
+
+<!-- Conflict Resolution Modal -->
+<div id="conflict-modal" onclick="if(event.target===this)closeConflictModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:700;align-items:center;justify-content:center;padding:1rem">
+  <div class="bg-white rounded-3xl p-6 space-y-4" style="max-width:400px;width:100%">
+    <div class="font-bold text-gray-900 text-lg">Data Conflict</div>
+    <p class="text-sm text-gray-600">You have portfolio data on this device AND in your cloud account. Which would you like to keep?</p>
+    <div class="space-y-2">
+      <button onclick="resolveConflict('local')" class="w-full py-3 rounded-2xl text-sm font-semibold text-white" style="background:#1d4ed8">Keep This Device's Data</button>
+      <button onclick="resolveConflict('cloud')" class="w-full py-3 rounded-2xl border-2 border-blue-600 text-sm font-semibold text-blue-600">Load Cloud Data</button>
+      <button onclick="resolveConflict('merge')" class="w-full py-3 rounded-2xl border-2 border-gray-200 text-sm font-semibold text-gray-700">Merge Both</button>
+    </div>
   </div>
 </div>
 
@@ -602,6 +655,26 @@
     <div class="flex items-center justify-between">
       <div class="font-bold text-gray-900 text-lg">Settings</div>
       <button onclick="closeSettings()" class="text-gray-400 text-2xl leading-none">&times;</button>
+    </div>
+    <!-- Account section (shown when authenticated) -->
+    <div id="settings-account-section" style="display:none">
+      <div class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-4 flex items-center gap-3">
+        <div id="settings-avatar" class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0"></div>
+        <div class="min-w-0">
+          <div id="settings-display-name" class="font-semibold text-gray-900 text-sm truncate"></div>
+          <div id="settings-email" class="text-xs text-gray-500 truncate"></div>
+          <div id="settings-tier-badge" class="text-xs font-semibold text-purple-600 mt-0.5"></div>
+        </div>
+        <button onclick="signOut();closeSettings();" class="ml-auto text-xs text-red-500 font-semibold flex-shrink-0">Sign out</button>
+      </div>
+    </div>
+    <!-- Sign in prompt (shown when not authenticated) -->
+    <div id="settings-signin-prompt">
+      <div class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-4">
+        <div class="text-sm font-semibold text-gray-800 mb-1">Sync your portfolio to the cloud</div>
+        <div class="text-xs text-gray-500 mb-3">Sign in to access your portfolio on any device, keep API keys secure, and get cloud-backed AI analysis.</div>
+        <button onclick="closeSettings();openAuthModal()" class="px-4 py-2 rounded-xl text-sm font-semibold text-white" style="background:linear-gradient(135deg,#1d4ed8,#6d28d9)">Sign In — Free</button>
+      </div>
     </div>
     <div>
       <label class="text-xs font-semibold text-gray-500 mb-1 block">AI Provider</label>
@@ -696,6 +769,223 @@ let chatHistory = [];
 let watchlist = safeJsonParse('msa_watchlist', []);
 let alerts   = safeJsonParse('msa_alerts',    {});
 let _darkMode = localStorage.getItem('msa_dark') === '1';
+
+// ── Supabase Auth State ────────────────────────────────
+// Replace SUPABASE_URL and SUPABASE_ANON_KEY with your project values
+// (anon key is safe to include in client-side code — it cannot bypass RLS)
+const SUPABASE_URL  = 'https://YOUR_PROJECT.supabase.co';
+const SUPABASE_ANON = 'YOUR_ANON_KEY';
+let _supabase = null;
+let _supabaseUser    = null;
+let _supabaseSession = null;
+let _activePortfolioId = null;
+let _syncStatus = 'local'; // 'local' | 'syncing' | 'synced' | 'offline'
+
+// Only initialise Supabase when real keys are configured
+if(SUPABASE_URL !== 'https://YOUR_PROJECT.supabase.co' && typeof supabase !== 'undefined'){
+  _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+}
+
+// ── DB Data Layer ──────────────────────────────────────
+// Routes reads/writes to Supabase when authenticated, falls back to localStorage
+const DB = {
+  async getPortfolio(){
+    if(!_supabase || !_supabaseUser || !_activePortfolioId) return portfolio;
+    const {data} = await _supabase.from('positions').select('ticker,shares,avg_cost').eq('portfolio_id',_activePortfolioId);
+    if(!data) return portfolio;
+    const result = {};
+    data.forEach(r=>{ result[r.ticker] = {shares:r.shares, avgCost:r.avg_cost}; });
+    return result;
+  },
+  async savePosition(ticker, shares, avgCost){
+    if(!_supabase || !_supabaseUser || !_activePortfolioId) return;
+    setSyncStatus('syncing');
+    const {error} = await _supabase.from('positions').upsert({portfolio_id:_activePortfolioId, ticker, shares, avg_cost:avgCost},{onConflict:'portfolio_id,ticker'});
+    setSyncStatus(error ? 'offline' : 'synced');
+  },
+  async removePosition(ticker){
+    if(!_supabase || !_supabaseUser || !_activePortfolioId) return;
+    setSyncStatus('syncing');
+    const {error} = await _supabase.from('positions').delete().eq('portfolio_id',_activePortfolioId).eq('ticker',ticker);
+    setSyncStatus(error ? 'offline' : 'synced');
+  },
+  async getWatchlist(){
+    if(!_supabase || !_supabaseUser) return watchlist;
+    const {data} = await _supabase.from('watchlist_items').select('ticker').eq('user_id',_supabaseUser.id).order('sort_order');
+    if(!data) return watchlist;
+    return data.map(r=>r.ticker);
+  },
+  async toggleWatchlist(ticker){
+    if(!_supabase || !_supabaseUser) return;
+    const isWatched = watchlist.includes(ticker);
+    if(isWatched){
+      await _supabase.from('watchlist_items').delete().eq('user_id',_supabaseUser.id).eq('ticker',ticker);
+    } else {
+      await _supabase.from('watchlist_items').upsert({user_id:_supabaseUser.id, ticker, sort_order:watchlist.length},{onConflict:'user_id,ticker'});
+    }
+  },
+  async getAlerts(){
+    if(!_supabase || !_supabaseUser) return alerts;
+    const {data} = await _supabase.from('price_alerts').select('ticker,condition,target_price,is_active').eq('user_id',_supabaseUser.id).eq('is_active',true);
+    if(!data) return alerts;
+    const result = {};
+    data.forEach(r=>{
+      if(!result[r.ticker]) result[r.ticker] = {};
+      result[r.ticker][r.condition] = r.target_price;
+    });
+    return result;
+  },
+  async setAlert(ticker, condition, price){
+    if(!_supabase || !_supabaseUser) return;
+    await _supabase.from('price_alerts').upsert({user_id:_supabaseUser.id, ticker, condition, target_price:price, is_active:true},{onConflict:'user_id,ticker,condition'});
+  },
+  async clearAlert(ticker, condition){
+    if(!_supabase || !_supabaseUser) return;
+    await _supabase.from('price_alerts').update({is_active:false}).eq('user_id',_supabaseUser.id).eq('ticker',ticker).eq('condition',condition);
+  },
+  // Queue an offline mutation in the service worker's IndexedDB sync queue
+  async queueOffline(op, table, payload){
+    if(!_supabase || !_supabaseUser) return;
+    const reg = await navigator.serviceWorker?.ready;
+    if(!reg) return;
+    // Post message to SW to enqueue (SW writes to its own IndexedDB)
+    reg.active?.postMessage({type:'QUEUE_SYNC', op, table, payload,
+      supabaseUrl: SUPABASE_URL, anonKey: SUPABASE_ANON,
+      accessToken: _supabaseSession?.access_token});
+    reg.sync?.register('msa-data-sync').catch(()=>{});
+  }
+};
+
+function setSyncStatus(status){
+  _syncStatus = status;
+  const el = document.getElementById('sync-status-icon');
+  if(!el) return;
+  const icons = {
+    local:    '',
+    syncing:  '↻',
+    synced:   '☁',
+    offline:  '⚡',
+  };
+  el.textContent = icons[status] || '';
+  el.title = {local:'Local only',syncing:'Syncing…',synced:'Synced to cloud',offline:'Offline — changes queued'}[status]||'';
+}
+
+// ── Auth functions ─────────────────────────────────────
+async function signInWithGoogle(){
+  if(!_supabase){ toast('Supabase not configured — add your project URL/key'); return; }
+  await _supabase.auth.signInWithOAuth({provider:'google', options:{redirectTo: location.href}});
+}
+async function signInWithApple(){
+  if(!_supabase){ toast('Supabase not configured'); return; }
+  await _supabase.auth.signInWithOAuth({provider:'apple', options:{redirectTo: location.href}});
+}
+async function signInWithMagicLink(email){
+  if(!_supabase){ toast('Supabase not configured'); return; }
+  const {error} = await _supabase.auth.signInWithOtp({email, options:{emailRedirectTo: location.href}});
+  if(error) toast('Error: '+error.message);
+  else toast('Magic link sent! Check your email.');
+}
+async function signOut(){
+  if(!_supabase) return;
+  await _supabase.auth.signOut();
+  _supabaseUser = null;
+  _supabaseSession = null;
+  _activePortfolioId = null;
+  setSyncStatus('local');
+  updateAuthUI();
+  toast('Signed out');
+}
+
+// Called when auth state changes — migrates localStorage data to Supabase on first sign-in
+async function onAuthStateChange(session){
+  _supabaseSession = session;
+  _supabaseUser = session?.user ?? null;
+  if(session){
+    // Load the user's default portfolio ID
+    const {data:portfolios} = await _supabase.from('portfolios').select('id').eq('owner_id',session.user.id).eq('is_default',true).limit(1);
+    if(portfolios?.[0]) _activePortfolioId = portfolios[0].id;
+    setSyncStatus('syncing');
+    // Migrate localStorage data to Supabase if this appears to be a fresh sign-in
+    await migrateLocalDataToCloud();
+    setSyncStatus('synced');
+  }
+  updateAuthUI();
+}
+
+// Migrate existing localStorage data into the user's Supabase account on first sign-in
+async function migrateLocalDataToCloud(){
+  if(!_supabase || !_supabaseUser || !_activePortfolioId) return;
+  // Check if cloud already has positions
+  const {data:existing} = await _supabase.from('positions').select('id').eq('portfolio_id',_activePortfolioId).limit(1);
+  const localHasData = Object.keys(portfolio).length > 0;
+  const cloudHasData = (existing||[]).length > 0;
+  if(localHasData && !cloudHasData){
+    // Auto-migrate: push local positions to cloud
+    const rows = Object.entries(portfolio).map(([ticker,p])=>({portfolio_id:_activePortfolioId, ticker, shares:p.shares, avg_cost:p.avgCost}));
+    await _supabase.from('positions').upsert(rows,{onConflict:'portfolio_id,ticker'});
+    // Migrate watchlist
+    if(watchlist.length){
+      const wlRows = watchlist.map((t,i)=>({user_id:_supabaseUser.id, ticker:t, sort_order:i}));
+      await _supabase.from('watchlist_items').upsert(wlRows,{onConflict:'user_id,ticker'});
+    }
+    toast('Your portfolio synced to the cloud ☁');
+  } else if(localHasData && cloudHasData){
+    // Show conflict resolution modal
+    showConflictModal();
+  }
+}
+
+function showConflictModal(){
+  const el = document.getElementById('conflict-modal');
+  if(el) el.style.display = 'flex';
+}
+function closeConflictModal(){
+  const el = document.getElementById('conflict-modal');
+  if(el) el.style.display = 'none';
+}
+async function resolveConflict(choice){
+  closeConflictModal();
+  if(choice === 'local'){
+    // Push local data to cloud (overwrite)
+    const rows = Object.entries(portfolio).map(([ticker,p])=>({portfolio_id:_activePortfolioId, ticker, shares:p.shares, avg_cost:p.avgCost}));
+    await _supabase.from('positions').upsert(rows,{onConflict:'portfolio_id,ticker'});
+    toast('Local data kept and synced to cloud');
+  } else if(choice === 'cloud'){
+    // Pull cloud data to local
+    portfolio = await DB.getPortfolio();
+    savePortfolio();
+    renderPortfolio();
+    toast('Cloud data loaded');
+  } else if(choice === 'merge'){
+    // Merge: push local tickers that don't exist in cloud
+    const cloudPortfolio = await DB.getPortfolio();
+    for(const [ticker,p] of Object.entries(portfolio)){
+      if(!cloudPortfolio[ticker]){
+        await DB.savePosition(ticker, p.shares, p.avgCost);
+      }
+    }
+    portfolio = await DB.getPortfolio();
+    savePortfolio();
+    renderPortfolio();
+    toast('Portfolios merged');
+  }
+}
+
+function openAuthModal(){
+  const el = document.getElementById('auth-modal');
+  if(el) el.style.display = 'flex';
+}
+function closeAuthModal(){
+  const el = document.getElementById('auth-modal');
+  if(el) el.style.display = 'none';
+}
+
+// Initialise auth listener
+function initSupabaseAuth(){
+  if(!_supabase) return;
+  _supabase.auth.getSession().then(({data:{session}})=>{ onAuthStateChange(session); });
+  _supabase.auth.onAuthStateChange((_event, session)=>{ onAuthStateChange(session); });
+}
 
 const BUILD = 'v2.3 · 2026-03-07';
 
@@ -826,9 +1116,6 @@ function getActiveAI(){
 let _activeStreamController = null;
 
 async function streamAI(systemPrompt, messages, maxTokens, onChunk, signal){
-  const ai = getActiveAI();
-  if(!ai) throw new Error('No API key found. Tap the gear icon → add Claude or Gemini key.');
-
   // Create our own AbortController with 60s timeout; merge with caller signal if provided
   const ctrl = new AbortController();
   _activeStreamController = ctrl;
@@ -836,6 +1123,39 @@ async function streamAI(systemPrompt, messages, maxTokens, onChunk, signal){
   signal?.addEventListener('abort', ()=>ctrl.abort(signal.reason));
 
   try{
+    // ── Authenticated path: route through server-side Edge Function proxy ──────
+    if(_supabase && _supabaseSession){
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/ai-proxy`,{
+        method:'POST',
+        signal: ctrl.signal,
+        headers:{
+          'Content-Type':'application/json',
+          'Authorization':`Bearer ${_supabaseSession.access_token}`,
+          'apikey': SUPABASE_ANON,
+        },
+        body:JSON.stringify({systemPrompt, messages, maxTokens, provider: aiPref||'auto'})
+      });
+      if(!resp.ok){
+        const e = await resp.json().catch(()=>({error:resp.statusText}));
+        throw new Error(e.error || `AI proxy error ${resp.status}`);
+      }
+      const reader=resp.body.getReader(), dec=new TextDecoder();
+      while(true){
+        const{done,value}=await reader.read(); if(done) break;
+        if(ctrl.signal.aborted) break;
+        for(const line of dec.decode(value,{stream:true}).split('\n')){
+          if(!line.startsWith('data: ')) continue;
+          const raw=line.slice(6).trim(); if(raw==='[DONE]') break;
+          try{const ev=JSON.parse(raw); if(ev.delta?.text) onChunk(ev.delta.text);}catch{}
+        }
+      }
+      return; // Done — don't fall through to direct browser path
+    }
+
+    // ── Anonymous path: direct browser-to-API calls (backward compat) ─────────
+    const ai = getActiveAI();
+    if(!ai) throw new Error('No API key found. Tap the gear icon → add Claude or Gemini key, or sign in for cloud AI.');
+
     if(ai === 'claude'){
       const resp = await fetch('https://api.anthropic.com/v1/messages',{
         method:'POST',
@@ -1730,6 +2050,9 @@ function closeImport(){
 // PORTFOLIO
 // ══════════════════════════════════════════════════════
 function savePortfolio(){ try{ localStorage.setItem('msa_portfolio', JSON.stringify(portfolio)); }catch(e){ toast('Storage full — oldest data may not save. Free up space in your browser.'); } }
+// Cloud sync helper called after local portfolio mutations
+async function syncPositionToCloud(ticker, shares, avgCost){ if(_supabaseUser) await DB.savePosition(ticker, shares, avgCost); }
+async function removePositionFromCloud(ticker){ if(_supabaseUser) await DB.removePosition(ticker); }
 
 async function addPosition(){
   const ticker = document.getElementById('p-ticker').value.trim().toUpperCase();
@@ -1741,6 +2064,7 @@ async function addPosition(){
     portfolio[ticker]={shares:tot, avgCost:(e.shares*e.avgCost+shares*cost)/tot};
   } else { portfolio[ticker]={shares,avgCost:cost}; }
   savePortfolio();
+  syncPositionToCloud(ticker, portfolio[ticker].shares, portfolio[ticker].avgCost);
   ['p-ticker','p-shares','p-cost-p'].forEach(id=>document.getElementById(id).value='');
   toast(`Added ${shares} × ${ticker}`);
   // Fetch quote for new ticker
@@ -1749,7 +2073,7 @@ async function addPosition(){
   renderPortfolio();
 }
 
-function removePosition(ticker){ delete portfolio[ticker]; savePortfolio(); renderPortfolio(); toast('Removed '+ticker); }
+function removePosition(ticker){ delete portfolio[ticker]; savePortfolio(); removePositionFromCloud(ticker); renderPortfolio(); toast('Removed '+ticker); }
 
 let _portfolioRefreshing = false;
 function renderPortfolio(){
@@ -2048,6 +2372,7 @@ setInterval(updateMarketCountdown, 60000);
 // WATCHLIST (Feature 2)
 // ══════════════════════════════════════════════════════
 function saveWatchlist(){ try{ localStorage.setItem('msa_watchlist', JSON.stringify(watchlist)); }catch(e){ toast('Storage full — watchlist may not save.'); } }
+async function syncWatchlistToCloud(ticker){ if(_supabaseUser) await DB.toggleWatchlist(ticker); }
 
 let _wlDebounce = {};
 function toggleWatchlist(ticker){
@@ -2064,6 +2389,7 @@ function toggleWatchlist(ticker){
     toast(`${t} removed from watchlist`);
   }
   saveWatchlist();
+  syncWatchlistToCloud(t);
   // Update star buttons in current view
   document.querySelectorAll(`[id="wl-star-${t}"]`).forEach(btn=>{
     btn.style.color = watchlist.includes(t) ? '#f59e0b' : '#cbd5e1';
@@ -2178,6 +2504,7 @@ function briefSearch(){
 // PRICE ALERTS (Feature 7)
 // ══════════════════════════════════════════════════════
 function saveAlerts(){ try{ localStorage.setItem('msa_alerts', JSON.stringify(alerts)); }catch(e){ toast('Storage full — alerts may not save.'); } }
+async function syncAlertToCloud(ticker, condition, price){ if(_supabaseUser && price) await DB.setAlert(ticker, condition, price); }
 
 function setAlert(ticker){
   const t = ticker.toUpperCase();
@@ -2334,12 +2661,74 @@ window.addEventListener('storage', e => {
 });
 
 // ══════════════════════════════════════════════════════
+// UPDATE AUTH UI IN SETTINGS
+// ══════════════════════════════════════════════════════
+function updateAuthUI(){
+  const avatarBtn = document.getElementById('auth-avatar-btn');
+  const signInBtn = document.getElementById('auth-signin-btn');
+  const accountSection = document.getElementById('settings-account-section');
+  const signinPrompt = document.getElementById('settings-signin-prompt');
+
+  if(_supabaseUser){
+    const name = _supabaseUser.user_metadata?.full_name || _supabaseUser.email || '';
+    const initials = name.split(/[\s@]/)[0].slice(0,2).toUpperCase();
+
+    // Header buttons
+    if(avatarBtn){
+      avatarBtn.style.display = '';
+      const initialsEl = avatarBtn.querySelector('#auth-initials');
+      if(_supabaseUser.user_metadata?.avatar_url){
+        avatarBtn.style.backgroundImage = `url(${_supabaseUser.user_metadata.avatar_url})`;
+        avatarBtn.style.backgroundSize = 'cover';
+        if(initialsEl) initialsEl.textContent = '';
+      } else {
+        avatarBtn.style.backgroundImage = '';
+        if(initialsEl) initialsEl.textContent = initials;
+      }
+    }
+    if(signInBtn) signInBtn.style.display = 'none';
+
+    // Settings panel
+    if(accountSection) accountSection.style.display = '';
+    if(signinPrompt) signinPrompt.style.display = 'none';
+    const settingsAvatar = document.getElementById('settings-avatar');
+    const settingsName = document.getElementById('settings-display-name');
+    const settingsEmail = document.getElementById('settings-email');
+    const tierBadge = document.getElementById('settings-tier-badge');
+    if(settingsAvatar) settingsAvatar.textContent = initials;
+    if(settingsName) settingsName.textContent = name;
+    if(settingsEmail) settingsEmail.textContent = _supabaseUser.email;
+    if(tierBadge){
+      const tier = _supabaseUser.user_metadata?.subscription_tier || 'free';
+      const tierLabel = {free:'Free plan',pro:'Pro plan',advisor:'Advisor plan'}[tier]||tier;
+      tierBadge.textContent = tierLabel;
+    }
+  } else {
+    if(avatarBtn) avatarBtn.style.display = 'none';
+    if(signInBtn) signInBtn.style.display = '';
+    if(accountSection) accountSection.style.display = 'none';
+    if(signinPrompt) signinPrompt.style.display = '';
+  }
+}
+
+// ══════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════
 applyDark(_darkMode);
 loadBrief();
 renderPortfolio();
 renderWatchlist();
+
+// Service Worker registration (Phase 1 — offline sync + push notifications)
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js').then(reg=>{
+    console.log('[MSA] Service worker registered, scope:', reg.scope);
+  }).catch(err=>{ console.warn('[MSA] SW registration failed:', err); });
+}
+
+// Initialise Supabase auth (Phase 1 — must come after state variables are defined)
+initSupabaseAuth();
+
 // Show onboarding for first-time visitors
 if(!localStorage.getItem('msa_onboarded') && !apiKey && !geminiKey) setTimeout(showOnboarding, 1200);
 </script>

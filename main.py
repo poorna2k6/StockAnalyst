@@ -1,12 +1,34 @@
 """FastAPI application for the Stock Portfolio Advisor."""
 
 from contextlib import asynccontextmanager
+import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.responses import JSONResponse
+from typing import Optional
+
+# ── Optional Supabase JWT verification (Phase 1) ─────────────────────────────
+# Set SUPABASE_JWT_SECRET in .env to enable JWT-protected endpoints.
+# Existing endpoints remain unauthenticated for backward compatibility.
+_SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+
+def _verify_jwt_optional(authorization: Optional[str] = Header(default=None)) -> Optional[dict]:
+    """Returns the JWT payload if a valid Supabase token is provided, else None."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    if not _SUPABASE_JWT_SECRET:
+        return None
+    try:
+        from jose import jwt, JWTError
+        token = authorization[7:]
+        payload = jwt.decode(token, _SUPABASE_JWT_SECRET, algorithms=["HS256"],
+                             options={"verify_aud": False})
+        return payload
+    except Exception:
+        return None
 
 import analyzer
 import portfolio as portfolio_store

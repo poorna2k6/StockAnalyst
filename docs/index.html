@@ -195,7 +195,7 @@
     body.dark .insight-buy{background:#14532d;color:#86efac}
     body.dark .insight-risk{background:#431407;color:#fdba74}
     body.dark .insight-info{background:#1e3a5f;color:#93c5fd}
-    body.dark #settings-modal>div,body.dark #import-modal>div,body.dark #onboarding-modal>div{background:#1e293b}
+    body.dark #settings-modal>div,body.dark #import-modal>div,body.dark #onboarding-modal>div,body.dark #auth-modal>div,body.dark #conflict-modal>div,body.dark #alert-modal>div{background:#1e293b}
     body.dark .sticky{background:#1e293b!important}
     body.dark .range-bar{background:#334155}
     body.dark .copy-btn{color:#475569}
@@ -236,7 +236,7 @@
         <svg id="dark-icon-moon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z"/></svg>
         <svg id="dark-icon-sun" class="w-5 h-5" style="display:none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" stroke-width="2"/><path stroke-linecap="round" stroke-width="2" d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
       </button>
-      <button onclick="openSettings()" class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500">
+      <button onclick="openSettings()" class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500" title="Settings" aria-label="Open settings">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
       </button>
     </div>
@@ -261,7 +261,7 @@
     <!-- Quick Stock Search -->
     <div class="card p-3">
       <div class="flex gap-2">
-        <input id="brief-search" type="text" placeholder="Search any stock: AAPL, TSLA, NVDA…" autocapitalize="characters" style="flex:1;border-radius:20px;padding:9px 14px;font-size:14px" />
+        <input id="brief-search" type="text" placeholder="Search any stock: AAPL, TSLA, NVDA…" autocapitalize="characters" autocorrect="off" autocomplete="off" spellcheck="false" style="flex:1;border-radius:20px;padding:9px 14px;font-size:14px" />
         <button onclick="briefSearch()" class="btn btn-primary btn-sm" style="width:auto;border-radius:20px;padding:9px 18px;flex-shrink:0">→</button>
       </div>
     </div>
@@ -390,7 +390,7 @@
 
     <div class="card p-3 sticky bottom-20 z-10">
       <div class="flex gap-2">
-        <input id="chat-input" type="text" placeholder="Ask about any stock or market..." class="flex-1" style="border-radius:20px;padding:10px 16px" />
+        <input id="chat-input" type="text" placeholder="Ask about any stock or market..." class="flex-1" style="border-radius:20px;padding:10px 16px" autocorrect="off" autocomplete="off" spellcheck="false" />
         <button onclick="handleChat()" class="w-11 h-11 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
           <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14M12 5l7 7-7 7"/></svg>
         </button>
@@ -430,7 +430,7 @@
       <div class="section-label">Add a Position</div>
       <div class="space-y-2.5">
         <div class="flex gap-2">
-          <input id="p-ticker" type="text" placeholder="Ticker (AAPL)" autocapitalize="characters" style="text-transform:uppercase;flex:1" />
+          <input id="p-ticker" type="text" placeholder="Ticker (AAPL)" autocapitalize="characters" autocorrect="off" autocomplete="off" spellcheck="false" style="text-transform:uppercase;flex:1" />
           <input id="p-shares" type="number" placeholder="Shares" min="0.001" step="any" style="flex:1" />
           <input id="p-cost-p" type="number" placeholder="Avg $" min="0.01" step="any" style="flex:1" />
         </div>
@@ -768,7 +768,7 @@ let watchlist = safeJsonParse('msa_watchlist', []);
 let alerts   = safeJsonParse('msa_alerts',    {});
 let _darkMode = localStorage.getItem('msa_dark') === '1';
 
-const BUILD = 'v2.3 · 2026-03-07';
+const BUILD = 'v2.4 · 2026-03-10';
 
 const SECTOR_MAP = {
   AAPL:'Tech',MSFT:'Tech',NVDA:'Tech',AMD:'Tech',INTC:'Tech',META:'Tech',
@@ -1086,7 +1086,7 @@ async function fetchTrending(){
 // TODAY'S BRIEF
 // ══════════════════════════════════════════════════════
 async function loadBrief(){
-  _briefLastFetch = Date.now();
+  // Note: _briefLastFetch is set only after successful data load (B2-2)
   _briefLoading = true;
   _updateLastUpdated();
   document.getElementById('header-status').textContent = 'Loading market data…';
@@ -1221,6 +1221,9 @@ async function loadBrief(){
   updateMarketCountdown();
   checkAllAlerts();
 
+  // Set fetch timestamp only after successful data load (B2-2)
+  _briefLastFetch = Date.now();
+  _updateLastUpdated();
   _briefLoading = false;
   updateMarketCountdown();
 
@@ -1301,6 +1304,10 @@ async function handleInvestmentPlan(){
   const riskText = {beginner:'beginner (safety first, ETFs preferred)',moderate:'moderate (mix of growth and stability)',aggressive:'aggressive (high growth, comfortable with high volatility)'}[risk];
 
   if(!getActiveAI()){
+    if(!validQuotes.length){
+      el.innerHTML = '<div class="card p-4 text-center text-sm text-red-500">Unable to load market data. Check your connection and tap "Build My Investment Plan" to retry.</div>';
+      return;
+    }
     el.innerHTML = renderRuleBasedPlan(budget, risk, horizon, validQuotes);
     return;
   }
@@ -1574,11 +1581,16 @@ STYLE RULES:
       chatEl.appendChild(starRow);
     }
   } catch(err){
-    loadEl.className='chat-msg-ai';
-    loadEl.textContent=`Error: ${err.message}. Please check your API key in Settings.`;
+    // Silently discard user-initiated aborts (tab switch); show error only for real failures (B2-3)
+    if(err?.name === 'AbortError' || err?.message?.includes('aborted')){
+      if(loadEl && loadEl.querySelector('.spin')) loadEl.remove();
+    } else {
+      loadEl.className='chat-msg-ai';
+      loadEl.textContent=`Error: ${err.message}. Please check your API key in Settings.`;
+    }
   } finally {
     // Clear any lingering spinner if the element is still in loading state
-    if(loadEl && loadEl.querySelector('.spin')) loadEl.innerHTML = '';
+    if(loadEl && loadEl.querySelector && loadEl.querySelector('.spin')) loadEl.innerHTML = '';
     _chatBusy = false; input.disabled = false; sendBtn.disabled = false; sendBtn.style.opacity = '1';
   }
   scrollChat();
@@ -1616,6 +1628,10 @@ document.getElementById('brief-search').addEventListener('keydown',e=>{ if(e.key
 function importFromScreenshot(){
   if(!getActiveAI()){ toast('Add a Claude or Gemini API key in Settings first'); openSettings(); return; }
   document.getElementById('screenshot-input').value = '';
+  // Reset modal state before opening so stale status from a previous import isn't shown (B3-5)
+  document.getElementById('import-status').textContent = '';
+  document.getElementById('import-holdings').innerHTML = '';
+  document.getElementById('import-actions').style.display = 'none';
   document.getElementById('screenshot-input').click();
 }
 
@@ -1843,8 +1859,8 @@ async function addPosition(){
       portfolio[ticker]={shares:tot, avgCost:(e.shares*e.avgCost+shares*cost)/tot};
     } else { portfolio[ticker]={shares,avgCost:cost}; }
     savePortfolio();
-    // Also persist to cloud DB if signed in
-    await DB.savePosition(ticker, shares, cost);
+    // Also persist to cloud DB if signed in — use merged portfolio values, not raw inputs (B2-1)
+    await DB.savePosition(ticker, portfolio[ticker].shares, portfolio[ticker].avgCost);
     ['p-ticker','p-shares','p-cost-p'].forEach(id=>document.getElementById(id).value='');
     toast(`Added ${shares} × ${ticker}`);
     renderPortfolio();
@@ -1853,7 +1869,7 @@ async function addPosition(){
   }
 }
 
-function removePosition(ticker){ delete portfolio[ticker]; savePortfolio(); renderPortfolio(); toast('Removed '+ticker); }
+function removePosition(ticker){ if(!confirm(`Remove ${ticker} from your portfolio?`)) return; delete portfolio[ticker]; savePortfolio(); DB.removePosition(ticker); renderPortfolio(); toast('Removed '+ticker); }
 
 let _portfolioRefreshing = false;
 function renderPortfolio(){
@@ -1955,18 +1971,24 @@ async function analyzePortfolio(){
   const entries = Object.entries(portfolio);
   if(!entries.length){ toast('Add positions first'); return; }
   _portfolioAnalyzing = true;
+  // Disable the button visually while analyzing (B2-6)
+  const analyzeBtn = document.querySelector('#p-analyze-card button');
+  const origBtnHTML = analyzeBtn ? analyzeBtn.innerHTML : '';
+  if(analyzeBtn){ analyzeBtn.disabled = true; analyzeBtn.innerHTML = '<span class="spin" style="width:16px;height:16px;border-width:2px;border-top-color:white;border-color:rgba(255,255,255,.3)"></span> Analyzing…'; }
   const el=document.getElementById('p-analysis');
   el.innerHTML='<div class="flex items-center gap-2 text-sm text-gray-400"><span class="spin"></span> Analyzing your portfolio…</div>';
   el.scrollIntoView({behavior:'smooth', block:'nearest'});
   if(!getActiveAI()){
     el.innerHTML='<div class="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-800">To get AI analysis, add a free API key in <button onclick="openSettings()" class="font-bold underline">Settings</button>. Supports Claude (Anthropic) and Gemini (Google) — both free tiers available.</div>';
     _portfolioAnalyzing = false;
+    if(analyzeBtn){ analyzeBtn.disabled = false; analyzeBtn.innerHTML = origBtnHTML; }
     return;
   }
   await Promise.all(entries.map(([t])=>fetchQuote(t).then(q=>{if(q)cacheQuote(t,q);})));
   const lines = entries.map(([t,pos])=>{
     const q=quotes[t],price=q?q.price:pos.avgCost,value=pos.shares*price,cost=pos.shares*pos.avgCost;
-    return `${t}: ${pos.shares} shares @ avg ${fmt(pos.avgCost)}, now ${fmt(price)}, P&L: ${(((price/pos.avgCost)-1)*100).toFixed(1)}%, value ${fmt(value)}`;
+    const pnlPct = pos.avgCost > 0 ? (((price/pos.avgCost)-1)*100).toFixed(1) : 'n/a';
+    return `${t}: ${pos.shares} shares @ avg ${fmt(pos.avgCost)}, now ${fmt(price)}, P&L: ${pnlPct}%, value ${fmt(value)}`;
   });
   try{
     const sysPrompt='You are a friendly personal investment advisor. Analyze portfolios in plain English for beginners. For each position give: current status (up/down), what to do (hold/add/reduce), and why in 1-2 sentences. End with overall portfolio health score (1-10) and top 2 specific action items.';
@@ -1977,7 +1999,10 @@ async function analyzePortfolio(){
     await streamAI(sysPrompt, msgs, 1200, chunk=>{ text+=chunk; se.textContent=text; });
     se.classList.remove('streaming');
   } catch(err){ el.innerHTML=`<div class="text-red-500 text-sm">${err.message}</div>`; }
-  finally { _portfolioAnalyzing = false; }
+  finally {
+    _portfolioAnalyzing = false;
+    if(analyzeBtn){ analyzeBtn.disabled = false; analyzeBtn.innerHTML = origBtnHTML; }
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -2015,7 +2040,7 @@ async function getIncomeIdeas(){
       + portfolioEntries.map(([t,p])=>{
           const price = quotes[t]?quotes[t].price:p.avgCost;
           const val   = p.shares*price;
-          const pnl   = ((price/p.avgCost-1)*100).toFixed(1);
+          const pnl   = p.avgCost > 0 ? ((price/p.avgCost-1)*100).toFixed(1) : 'n/a';
           return `• ${t}: ${p.shares} shares @ $${price.toFixed(2)}, value ~$${val.toFixed(0)} (${pnl}% P&L)`;
         }).join('\n');
   }
@@ -2043,6 +2068,8 @@ Be specific with real ticker symbols and price levels. Assume I use Robinhood or
     await streamAI(sys, [{role:'user',content:userMsg}], 1500, chunk=>{ text+=chunk; se.textContent=text; });
     se.classList.remove('streaming');
   } catch(err){
+    // Restore tips on error so the tab isn't left empty (B2-5)
+    document.getElementById('earn-tips').style.display = '';
     el.innerHTML = `<div class="card p-4"><div class="text-red-500 text-sm">${err.message}</div></div>`;
   }
 }
@@ -2138,12 +2165,17 @@ function updateMarketCountdown(){
     const h = Math.floor(totalMin / 60), m = totalMin % 60;
     el.textContent = h > 0 ? `Pre-market · Opens in ${h}h ${m}m` : `Pre-market · Opens in ${m}m`;
   } else {
-    // Closed/weekend — show last close timestamp
+    // Closed/weekend — walk back to the most recent trading weekday (B2-4)
     const closeTime = new Date(etNow);
-    // Set to last 4 PM ET close on a weekday
     closeTime.setHours(16, 0, 0, 0);
-    if(closeTime > etNow) closeTime.setDate(closeTime.getDate() - 1); // yesterday's close
-    el.textContent = 'Last close · ' + closeTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    // If today before 4 PM ET, go to previous calendar day first
+    if(closeTime > etNow) closeTime.setDate(closeTime.getDate() - 1);
+    // Then keep stepping back until we land on a Mon–Fri non-holiday
+    while(closeTime.getDay() === 0 || closeTime.getDay() === 6 || isNYSEHoliday(closeTime)){
+      closeTime.setDate(closeTime.getDate() - 1);
+    }
+    const dayName = closeTime.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+    el.textContent = `Last close · ${dayName} 4:00 PM ET`;
   }
 }
 setInterval(updateMarketCountdown, 60000);
@@ -2663,6 +2695,9 @@ document.addEventListener('keydown', e => {
     const el = document.getElementById(id);
     if (el && el.style.display !== 'none') closeModal(id);
   });
+  // Import modal uses a CSS class instead of display style (B3-6)
+  const importModal = document.getElementById('import-modal');
+  if (importModal && importModal.classList.contains('open')) closeImport();
 });
 
 // ── Post-auth hook: restore push toggle state from DB (B1-8) ──

@@ -309,12 +309,11 @@
     </div>
 
     <div class="card p-4">
-      <div class="section-label">Beginners Corner</div>
-      <div class="space-y-2 text-sm">
-        <div class="insight-card insight-info"><strong>What is a stock?</strong> A stock is a small piece of ownership in a company. If the company grows and profits, your stock value goes up.</div>
-        <div class="insight-card insight-info"><strong>What is an ETF?</strong> An ETF (like SPY or QQQ) is a basket of many stocks in one. It's safer for beginners because you're diversified automatically.</div>
-        <div class="insight-card insight-buy"><strong>Golden rule:</strong> Never invest money you can't afford to lose for at least 1 year. Start with ETFs before individual stocks.</div>
+      <div class="flex items-center justify-between mb-2">
+        <div class="section-label mb-0">Beginners Corner</div>
+        <button onclick="renderBeginnerTips()" class="text-xs text-blue-500 font-semibold flex items-center gap-1" style="background:none;border:none;cursor:pointer;padding:0">↻ New Tips</button>
       </div>
+      <div id="beginner-tips-container" class="space-y-2 text-sm"></div>
     </div>
   </div>
 
@@ -769,7 +768,7 @@ let watchlist = safeJsonParse('msa_watchlist', []);
 let alerts   = safeJsonParse('msa_alerts',    {});
 let _darkMode = localStorage.getItem('msa_dark') === '1';
 
-const BUILD = 'v2.5 · 2026-03-10';
+const BUILD = 'v2.6 · 2026-03-10';
 
 const SECTOR_MAP = {
   AAPL:'Tech',MSFT:'Tech',NVDA:'Tech',AMD:'Tech',INTC:'Tech',META:'Tech',
@@ -824,6 +823,38 @@ const TIPS = {
   fcf: { title: 'Free Cash Flow (FCF)', body: 'Real cash the company generates after paying all expenses and investments. This is the most honest measure of a company\'s financial health.' },
   beta: { title: 'Beta (Volatility)', body: 'How much a stock moves compared to the market. Beta of 1 = moves with market. Beta of 2 = moves twice as much. Higher beta = more risk AND reward.' },
 };
+
+const BEGINNER_TIPS = [
+  { cls:'insight-info',  title:'What is a stock?',           body:'A stock is a tiny ownership slice of a company. When the company earns more, your slice becomes more valuable.' },
+  { cls:'insight-info',  title:'What is an ETF?',            body:'An ETF like SPY or QQQ holds hundreds of stocks in one. Instant diversification — far safer for beginners than picking single stocks.' },
+  { cls:'insight-buy',   title:'Dollar-Cost Averaging',      body:'Invest a fixed amount (e.g. $100) every month regardless of price. You automatically buy more shares when prices drop.' },
+  { cls:'insight-info',  title:'The power of compounding',   body:'Reinvesting gains creates gains on gains. $1,000 growing at 10%/yr becomes $17,449 in 30 years — without adding another dollar.' },
+  { cls:'insight-info',  title:'What does P/E mean?',        body:'Price-to-Earnings: how much you pay per $1 of profit. A P/E of 20 means $20 paid for every $1 earned. Lower often = cheaper stock.' },
+  { cls:'insight-buy',   title:'Diversification is free insurance', body:'Spreading across 15–20 stocks in different sectors cuts risk in half vs holding 1–2 stocks. ETFs do this automatically.' },
+  { cls:'insight-warn',  title:'Market cycles are normal',   body:'Every bull market ends with a bear market. The S&P 500 has dropped 20%+ eleven times since 1950 — and recovered every single time.' },
+  { cls:'insight-warn',  title:'The golden rule',            body:'Never invest money you might need within 12 months. Short-term volatility is noise — time IN the market beats timing the market.' },
+  { cls:'insight-buy',   title:'How stop-losses work',       body:'A stop-loss auto-sells if a stock drops to your limit. Buy AAPL at $200, set stop at $180 — your max loss is capped at 10%.' },
+  { cls:'insight-info',  title:'Dividend investing basics',  body:'Dividend stocks like KO or JNJ pay you cash quarterly just for holding. Reinvest those dividends and compounding accelerates.' },
+  { cls:'insight-warn',  title:'Beating the market is hard', body:'Over 15 years, 90% of professional fund managers underperform a simple S&P 500 index fund. For most people, simple beats complex.' },
+  { cls:'insight-warn',  title:'Emotions are your enemy',    body:'The average investor earns 2–3% less per year than the market by panic-selling dips and chasing rallies. Make a plan and stick to it.' },
+  { cls:'insight-info',  title:'Reading a 52-week range',    body:'A stock near its 52-week low may be a bargain — or falling further. Near its high may mean momentum — or an expensive entry. Context is everything.' },
+  { cls:'insight-buy',   title:'Position sizing matters',    body:'Pros rarely put more than 5–10% of their portfolio in any single stock. This way, even if one position collapses, your portfolio survives.' },
+  { cls:'insight-info',  title:'Free cash flow is king',     body:'Free cash flow (FCF) is the real cash a company generates after expenses. High FCF = healthy business. It\'s harder to fake than earnings.' },
+];
+
+function renderBeginnerTips() {
+  const container = document.getElementById('beginner-tips-container');
+  if (!container) return;
+  const pool = [...BEGINNER_TIPS];
+  const picks = [];
+  while (picks.length < 3 && pool.length) {
+    const i = Math.floor(Math.random() * pool.length);
+    picks.push(pool.splice(i, 1)[0]);
+  }
+  container.innerHTML = picks.map(t =>
+    `<div class="insight-card ${t.cls}"><strong>${esc(t.title)}:</strong> ${esc(t.body)}</div>`
+  ).join('');
+}
 
 const INDEXES = [
   { ticker: 'SPY', name: 'S&P 500 (Top 500 US stocks)' },
@@ -1561,7 +1592,7 @@ STYLE RULES:
     loadEl.className = 'chat-msg-ai streaming';
     loadEl.textContent = '';
     let text='';
-    await streamAI(systemPrompt, messages, 800, chunk=>{ text+=chunk; loadEl.textContent=text; scrollChat(); });
+    await streamAI(systemPrompt, messages, 2000, chunk=>{ text+=chunk; loadEl.textContent=text; scrollChat(); });
     loadEl.classList.remove('streaming');
     chatHistory.push({role:'assistant',content:text});
     addCopyBtn(loadEl);
@@ -2873,6 +2904,7 @@ window.addEventListener('storage', e => {
 // INIT
 // ══════════════════════════════════════════════════════
 applyDark(_darkMode);
+renderBeginnerTips();
 loadBrief();
 renderPortfolio();
 renderWatchlist();

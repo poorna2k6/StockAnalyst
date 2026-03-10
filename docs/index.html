@@ -14,6 +14,32 @@
   <meta name="apple-mobile-web-app-title" content="StockAnalyst" />
   <!-- Icons injected by JS below for widest compatibility -->
 
+  <!-- Content Security Policy
+       'unsafe-inline' is required for the inline <script> / <style> blocks in this single-file SPA.
+       The meaningful protection here is connect-src, which prevents data exfiltration by limiting
+       which hosts JS can reach (even if XSS were exploited). object-src 'none' blocks Flash/plugins.
+  -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src  'self' 'unsafe-inline' https://cdn.tailwindcss.com;
+    style-src   'self' 'unsafe-inline';
+    connect-src 'self'
+      https://api.anthropic.com
+      https://generativelanguage.googleapis.com
+      https://query1.finance.yahoo.com
+      https://query2.finance.yahoo.com
+      https://corsproxy.io
+      https://api.allorigins.win;
+    img-src  'self' data: blob:;
+    font-src 'self';
+    worker-src 'self' blob:;
+    object-src 'none';
+    base-uri   'self';
+  ">
+  <!-- Tailwind Play CDN — NOTE: the Play CDN compiles CSS dynamically and does not
+       support Subresource Integrity (SRI) hashes. For production, replace this with
+       a pre-built tailwind.min.css served from your own domain, then add integrity="sha384-…".
+  -->
   <script src="https://cdn.tailwindcss.com"></script>
 
   <!-- Generate app icon via canvas (works on iOS + Android even without static PNG files) -->
@@ -324,7 +350,10 @@
 
     <div class="card p-4">
       <div class="section-label">Investment Planner</div>
-      <p class="text-sm text-gray-500 mb-4">Tell me your budget and goals. I'll split it across the best stocks for you with specific entry prices, profit targets, and exit strategies.</p>
+      <p class="text-sm text-gray-500 mb-3">Tell me your budget and goals. I'll split it across the best stocks for you with specific entry prices, profit targets, and exit strategies.</p>
+    <div class="text-xs text-amber-700 bg-amber-50 rounded-xl px-3 py-2 border border-amber-100 mb-3" role="note">
+      ⚠️ <strong>Educational use only.</strong> This is not financial advice. All suggestions are AI-generated estimates. Always do your own research and consult a licensed financial advisor before investing real money.
+    </div>
       <div class="space-y-3">
         <div>
           <label class="text-xs font-semibold text-gray-500 mb-1 block">Your Investment Budget (USD)</label>
@@ -457,6 +486,9 @@
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.347.347a3.75 3.75 0 01-5.303 0l-.347-.347z"/></svg>
         Analyze My Portfolio with AI
       </button>
+      <div class="text-xs text-amber-700 bg-amber-50 rounded-xl px-3 py-2 border border-amber-100 mt-2" role="note">
+        ⚠️ AI analysis is for educational purposes only — not financial advice.
+      </div>
       <div id="p-analysis" class="mt-3"></div>
     </div>
   </div>
@@ -727,6 +759,25 @@
   </div>
 </div>
 
+<!-- 1-Year Price Chart Modal -->
+<div id="chart-modal" onclick="if(event.target===this)closeModal('chart-modal')" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:700;align-items:flex-end;justify-content:center" aria-hidden="true">
+  <div class="bg-white w-full rounded-t-3xl p-6" style="max-height:85vh;overflow-y:auto;max-width:512px;margin:0 auto">
+    <div class="flex items-start justify-between mb-0.5">
+      <div>
+        <div id="chart-title" class="text-xl font-bold text-gray-900"></div>
+        <div id="chart-subtitle" class="text-xs text-gray-400 truncate" style="max-width:220px"></div>
+      </div>
+      <button onclick="closeModal('chart-modal')" class="text-gray-400 text-2xl leading-none" aria-label="Close chart">&times;</button>
+    </div>
+    <div class="text-xs text-gray-400 mb-3">1-Year Weekly Price Chart</div>
+    <div id="chart-body" style="min-height:100px"></div>
+    <div class="flex gap-2 mt-4">
+      <button id="chart-ask-btn" class="btn btn-primary" style="flex:1">AI Analysis →</button>
+      <button id="chart-watch-btn" class="btn btn-outline btn-sm" style="min-width:110px;flex-shrink:0">☆ Watchlist</button>
+    </div>
+  </div>
+</div>
+
 <!-- Tooltip popup -->
 <div id="tip-popup" class="tip-popup" onclick="this.classList.remove('open')">
   <div class="font-bold mb-1" id="tip-title"></div>
@@ -741,8 +792,13 @@
 // CONSTANTS & STATE
 // ══════════════════════════════════════════════════════
 const SK = 'msa_state_v3';
-let apiKey = localStorage.getItem('msa_key') || '';
-let geminiKey = localStorage.getItem('msa_gemini') || '';
+// API keys: prefer sessionStorage (cleared on tab/window close) so keys
+// don't persist indefinitely. Fall back to localStorage for existing users,
+// then immediately migrate them to sessionStorage and remove from localStorage.
+let apiKey = sessionStorage.getItem('msa_key') || localStorage.getItem('msa_key') || '';
+let geminiKey = sessionStorage.getItem('msa_gemini') || localStorage.getItem('msa_gemini') || '';
+if(apiKey)    { sessionStorage.setItem('msa_key',    apiKey);    localStorage.removeItem('msa_key'); }
+if(geminiKey) { sessionStorage.setItem('msa_gemini', geminiKey); localStorage.removeItem('msa_gemini'); }
 let aiPref = localStorage.getItem('msa_ai_pref') || 'auto';
 let userName = localStorage.getItem('msa_name') || '';
 function safeJsonParse(key, fallback){
@@ -768,7 +824,7 @@ let watchlist = safeJsonParse('msa_watchlist', []);
 let alerts   = safeJsonParse('msa_alerts',    {});
 let _darkMode = localStorage.getItem('msa_dark') === '1';
 
-const BUILD = 'v2.7 · 2026-03-10';
+const BUILD = 'v2.8 · 2026-03-10';
 
 const SECTOR_MAP = {
   AAPL:'Tech',MSFT:'Tech',NVDA:'Tech',AMD:'Tech',INTC:'Tech',META:'Tech',
@@ -921,8 +977,8 @@ function saveSettings(){
   geminiKey = document.getElementById('settings-gemini-key').value.trim();
   aiPref = document.getElementById('settings-ai-pref').value;
   userName = document.getElementById('settings-name').value.trim();
-  localStorage.setItem('msa_key', apiKey);
-  localStorage.setItem('msa_gemini', geminiKey);
+  sessionStorage.setItem('msa_key', apiKey);    localStorage.removeItem('msa_key');
+  sessionStorage.setItem('msa_gemini', geminiKey); localStorage.removeItem('msa_gemini');
   localStorage.setItem('msa_ai_pref', aiPref);
   localStorage.setItem('msa_name', userName);
   closeSettings();
@@ -1047,6 +1103,93 @@ async function tryFetch(url, timeout=7000){
     } catch{}
   }
   return null;
+}
+
+// ── 1-Year Price Chart ──────────────────────────────────
+async function showChart(ticker) {
+  openModal('chart-modal');
+  document.getElementById('chart-title').textContent = ticker;
+  document.getElementById('chart-subtitle').textContent = quotes[ticker]?.name?.split(' ').slice(0,5).join(' ') || '';
+  const body = document.getElementById('chart-body');
+  body.innerHTML = '<div class="flex justify-center items-center py-10"><span class="spin"></span></div>';
+
+  // Wire up action buttons with this ticker captured in closure
+  document.getElementById('chart-ask-btn').onclick = () => {
+    closeModal('chart-modal');
+    quickAsk(`Give me a full analysis of ${ticker} with a buy/hold/avoid verdict and entry price target`);
+  };
+  const watchBtn = document.getElementById('chart-watch-btn');
+  const updateWatchBtn = () => {
+    watchBtn.textContent = watchlist.includes(ticker) ? '★ Watchlisted' : '☆ Watchlist';
+  };
+  watchBtn.onclick = () => { toggleWatchlist(ticker); updateWatchBtn(); };
+  updateWatchBtn();
+
+  try {
+    const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1wk&range=1y`;
+    const d = await tryFetch(url, 10000);
+    const result = d?.chart?.result?.[0];
+    if (!result?.timestamp?.length) throw new Error('No chart data returned');
+
+    const timestamps = result.timestamp;
+    const closes = result.indicators?.quote?.[0]?.close || [];
+    const pts = timestamps.map((t, i) => ({ t, p: closes[i] })).filter(x => x.p != null && isFinite(x.p));
+    if (pts.length < 4) throw new Error('Insufficient data points');
+
+    const prices = pts.map(x => x.p);
+    const minP = Math.min(...prices), maxP = Math.max(...prices);
+    const pRange = maxP - minP || 1;
+    const first = prices[0], last = prices[prices.length - 1];
+    const chg = (last / first - 1) * 100;
+    const color = last >= first ? '#16a34a' : '#dc2626';
+
+    // SVG layout constants
+    const W = 340, H = 130, PL = 44, PR = 8, PT = 8, PB = 22;
+    const cW = W - PL - PR, cH = H - PT - PB;
+    const toX = i => PL + (i / Math.max(pts.length - 1, 1)) * cW;
+    const toY = p => PT + cH - ((p - minP) / pRange * cH);
+    const fmtP = p => p >= 1000 ? `$${(p / 1000).toFixed(1)}k` : `$${p.toFixed(0)}`;
+    const fmtDate = ts => new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+
+    const pathD = pts.map((pt, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(pt.p).toFixed(1)}`).join(' ');
+    const areaD = `${pathD} L${toX(pts.length - 1).toFixed(1)},${(PT + cH).toFixed(1)} L${PL},${(PT + cH).toFixed(1)} Z`;
+
+    const yGridLines = [0.25, 0.5, 0.75].map(f => {
+      const y = PT + cH * (1 - f);
+      return `<line x1="${PL}" y1="${y.toFixed(1)}" x2="${PL + cW}" y2="${y.toFixed(1)}" stroke="#f1f5f9" stroke-width="1"/>
+              <text x="${PL - 3}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" font-size="9" fill="#94a3b8">${fmtP(minP + pRange * f)}</text>`;
+    }).join('');
+
+    const midIdx = Math.floor(pts.length / 2);
+    const svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="overflow:visible;display:block">
+      <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.18"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+      </linearGradient></defs>
+      <line x1="${PL}" y1="${PT}" x2="${PL}" y2="${PT + cH}" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="${PL}" y1="${PT + cH}" x2="${PL + cW}" y2="${PT + cH}" stroke="#e2e8f0" stroke-width="1"/>
+      ${yGridLines}
+      <path d="${areaD}" fill="url(#cg)"/>
+      <path d="${pathD}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${toX(pts.length - 1).toFixed(1)}" cy="${toY(last).toFixed(1)}" r="3.5" fill="${color}" stroke="white" stroke-width="1.5"/>
+      <text x="${PL}" y="${H - 1}" text-anchor="middle" font-size="9" fill="#94a3b8">${fmtDate(pts[0].t)}</text>
+      <text x="${toX(midIdx).toFixed(1)}" y="${H - 1}" text-anchor="middle" font-size="9" fill="#94a3b8">${fmtDate(pts[midIdx].t)}</text>
+      <text x="${(PL + cW).toFixed(1)}" y="${H - 1}" text-anchor="end" font-size="9" fill="#94a3b8">${fmtDate(pts[pts.length - 1].t)}</text>
+    </svg>`;
+
+    body.innerHTML = `
+      <div class="flex items-baseline gap-3 mb-3">
+        <span class="text-2xl font-bold text-gray-900">${fmt(last)}</span>
+        <span class="text-sm font-bold ${last >= first ? 'gain' : 'loss'}">${chg >= 0 ? '+' : ''}${chg.toFixed(1)}% (1Y)</span>
+      </div>
+      ${svg}
+      <div class="flex justify-between text-xs text-gray-400 mt-2 px-1">
+        <span>52W Low: ${fmtP(minP)}</span>
+        <span>52W High: ${fmtP(maxP)}</span>
+      </div>`;
+  } catch (e) {
+    body.innerHTML = `<p class="text-gray-400 text-sm text-center py-8">Chart unavailable — ${esc(e.message)}</p>`;
+  }
 }
 
 async function fetchQuote(ticker){
@@ -1241,6 +1384,7 @@ async function loadBrief(){
         <div class="font-bold text-gray-900 text-sm">${fmt(q.price)}</div>
         <div class="text-xs font-semibold ${q.change>=0?'gain':'loss'}">${fmtN(q.changePct)}</div>
       </div>
+      <button onclick="event.stopPropagation();showChart('${esc(t)}')" style="background:none;border:none;cursor:pointer;padding:4px 4px;font-size:15px;line-height:1;flex-shrink:0;color:#94a3b8" title="View 1Y chart">📈</button>
       <button onclick="toggleWatchlist('${esc(t)}')" id="wl-star-${esc(t)}" style="background:none;border:none;cursor:pointer;padding:4px 6px;font-size:18px;line-height:1;flex-shrink:0;color:${watchlist.includes(t)?'#f59e0b':'#cbd5e1'}" title="Add to watchlist">${watchlist.includes(t)?'★':'☆'}</button>
     </div>`;
   }).join('');
@@ -1972,7 +2116,10 @@ function renderPortfolio(){
       </div>
       <div class="flex justify-between text-xs border-t border-gray-50 pt-2">
         <span class="text-gray-500">Price: <strong class="text-gray-800">${fmt(r.price)}</strong>${r.q?` <span class="${r.q.changePct>=0?'gain':'loss'}">${r.q.changePct>=0?'▲':'▼'}${Math.abs(r.q.changePct).toFixed(2)}%</span>`:''}</span>
-        <button class="text-red-400 font-semibold" onclick="removePosition('${esc(r.t)}')">Remove</button>
+        <div class="flex items-center gap-3">
+          <button onclick="showChart('${esc(r.t)}')" title="View 1Y chart" style="background:none;border:none;cursor:pointer;padding:0;font-size:14px;line-height:1;color:#94a3b8">📈</button>
+          <button class="text-red-400 font-semibold" onclick="removePosition('${esc(r.t)}')">Remove</button>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -2464,7 +2611,7 @@ function renderWatchlist(){
       </div>
     </div>`;
     const barPct = q.hi52&&q.lo52 ? Math.max(0,Math.min(100,(q.price-q.lo52)/(q.hi52-q.lo52)*100)) : null;
-    return `<div class="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0 rounded-lg px-1 cursor-pointer" onclick="quickAsk('Give me a full analysis of ${t} with a buy/hold/avoid verdict and entry price target')">
+    return `<div class="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0 rounded-lg px-1 cursor-pointer" onclick="quickAsk('Give me a full analysis of ${esc(t)} with a buy/hold/avoid verdict and entry price target')">
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-1.5 flex-wrap">
           <span class="font-bold text-gray-900 text-sm">${esc(t)}</span>
@@ -2477,6 +2624,7 @@ function renderWatchlist(){
         <div class="text-xs font-semibold ${q.change>=0?'gain':'loss'}">${fmtN(q.changePct)}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0">
+        <button onclick="event.stopPropagation();showChart('${esc(t)}')" title="View 1Y chart" style="background:none;border:none;cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;opacity:0.6">📈</button>
         <button onclick="event.stopPropagation();setAlert('${esc(t)}')" title="Set price alert" style="background:none;border:none;cursor:pointer;font-size:15px;line-height:1;padding:2px 4px;opacity:${alerts[t]?'1':'0.45'}">${alerts[t]?'🔔':'🔕'}</button>
         <button onclick="event.stopPropagation();removeFromWatchlist('${esc(t)}')" style="background:none;border:none;cursor:pointer;color:#f87171;font-size:18px;line-height:1;padding:2px 4px">×</button>
       </div>
@@ -2855,9 +3003,10 @@ async function deleteMyAccount() {
     const data = await resp.json();
     if (!data.success) { toast('Delete error: ' + (data.error || 'Unknown error')); return; }
     // ONLY now clear local state
-    ['msa_portfolio','msa_watchlist','msa_alerts','msa_key','msa_gemini',
+    ['msa_portfolio','msa_watchlist','msa_alerts',
      'msa_name','msa_dark','msa_ai_pref','msa_onboarded','msa_offline_queue'
     ].forEach(k => localStorage.removeItem(k));
+    ['msa_key','msa_gemini'].forEach(k => { localStorage.removeItem(k); sessionStorage.removeItem(k); });
     if (_supabase) await _supabase.auth.signOut();
     toast('Account deleted');
     setTimeout(() => location.reload(), 1500);

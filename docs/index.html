@@ -255,6 +255,7 @@
       <div>
         <div class="font-bold text-gray-900 text-sm leading-tight" style="letter-spacing:-.2px">My Stock Analyst</div>
         <div class="text-xs leading-tight" id="header-status" style="color:#7c3aed;font-weight:600">Loading market data…</div>
+        <div class="text-xs text-gray-300 leading-tight" id="header-build" style="font-size:10px"></div>
       </div>
     </div>
     <div class="flex items-center gap-1.5">
@@ -324,7 +325,7 @@
 
     <div class="card p-4">
       <div class="section-label">Today's Top Picks</div>
-      <p class="text-xs text-gray-400 mb-3">Trending stocks worth watching — tap any to get AI analysis</p>
+      <p class="text-xs text-gray-400 mb-3">Ranked live by momentum &amp; value from 32 liquid stocks — score badge shows strength</p>
       <div id="top-picks" class="space-y-2">
         <div class="flex items-center gap-2 text-sm text-gray-400"><span class="spin"></span> Scanning market…</div>
       </div>
@@ -824,7 +825,12 @@ let watchlist = safeJsonParse('msa_watchlist', []);
 let alerts   = safeJsonParse('msa_alerts',    {});
 let _darkMode = localStorage.getItem('msa_dark') === '1';
 
-const BUILD = 'v2.8 · 2026-03-10';
+const BUILD = 'v2.9 · 2026-03-11';
+// Show build version immediately so users can always confirm which version is deployed
+document.addEventListener('DOMContentLoaded', () => {
+  const el = document.getElementById('header-build');
+  if(el) el.textContent = BUILD;
+});
 
 const SECTOR_MAP = {
   AAPL:'Tech',MSFT:'Tech',NVDA:'Tech',AMD:'Tech',INTC:'Tech',META:'Tech',
@@ -1032,10 +1038,10 @@ async function streamAI(systemPrompt, messages, maxTokens, onChunk, signal){
       }
     } else {
       // Gemini
-      const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse`;
+      const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?key=${geminiKey}&alt=sse`;
       const contents=messages.map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:m.content}]}));
       const resp=await fetch(url,{
-        method:'POST',signal: ctrl.signal,headers:{'content-type':'application/json','Authorization':`Bearer ${geminiKey}`},
+        method:'POST',signal: ctrl.signal,headers:{'content-type':'application/json'},
         body:JSON.stringify({system_instruction:{parts:[{text:systemPrompt}]},contents,generationConfig:{maxOutputTokens:maxTokens}})
       });
       if(!resp.ok){const e=await resp.json();throw new Error('Gemini: '+(e.error?.message||resp.status));}
@@ -1258,6 +1264,62 @@ async function fetchTrending(){
 }
 
 // ══════════════════════════════════════════════════════
+// PICKS RANKING ENGINE
+// 32-stock candidate pool across 8 sectors, ranked live
+// by quoteScore (momentum + value + market cap).
+// ══════════════════════════════════════════════════════
+const PICKS_POOL = [
+  // Mega-cap tech / AI
+  'NVDA','AAPL','MSFT','META','GOOGL','AMZN','TSLA',
+  // Semiconductors
+  'AMD','AVGO','TSM','QCOM','MU','ARM',
+  // Finance / Payments
+  'JPM','GS','V','MA','BAC',
+  // Healthcare / Pharma
+  'UNH','LLY','JNJ','ABBV','MRK',
+  // Consumer / Retail
+  'COST','WMT','HD','NKE','MCD',
+  // Energy
+  'XOM','CVX',
+  // Growth / Disruptive
+  'PLTR','CRWD','SHOP',
+];
+
+async function fetchAndRankPicks(trending = []) {
+  // Merge trending (real-time Yahoo signal) with curated pool, deduplicated
+  const candidates = [...new Set([...trending.slice(0, 8), ...PICKS_POOL])].slice(0, 38);
+
+  // Fetch all quotes in parallel
+  const quotesArr = await Promise.all(candidates.map(t => fetchQuote(t)));
+
+  // Score each using quoteScore (momentum + value + market-cap, no fundamentals needed)
+  const scored = candidates
+    .map((t, i) => ({ t, q: quotesArr[i] }))
+    .filter(x => x.q)
+    .map(x => ({ ...x, score: quoteScore(x.q, 'moderate') }))
+    .sort((a, b) => b.score - a.score);
+
+  // Sector diversity: max 2 per sector so no single theme dominates
+  const sectorCount = {};
+  const picks = [];
+  for (const x of scored) {
+    const sector = SECTOR_MAP[x.t] || 'Other';
+    const c = sectorCount[sector] || 0;
+    if (c < 2) { sectorCount[sector] = c + 1; picks.push(x); }
+    if (picks.length === 9) break;
+  }
+  // Fill remaining slots if dedup left fewer than 9
+  if (picks.length < 9) {
+    const inPicks = new Set(picks.map(x => x.t));
+    for (const x of scored) {
+      if (!inPicks.has(x.t)) { picks.push(x); inPicks.add(x.t); }
+      if (picks.length === 9) break;
+    }
+  }
+  return picks; // [{t, q, score}, …]
+}
+
+// ══════════════════════════════════════════════════════
 // TODAY'S BRIEF
 // ══════════════════════════════════════════════════════
 async function loadBrief(){
@@ -1363,19 +1425,23 @@ async function loadBrief(){
     </div>
     ${signals.map(s=>`<div class="text-xs text-gray-700 py-1.5 border-l-2 ${s.color} pl-2.5 mb-1.5 leading-snug">${s.text}</div>`).join('')}`;
 
-  // Top picks: trending + curated
-  const pickTickers = [...new Set([...(trending.slice(0,5)), 'NVDA','AAPL','MSFT','META','AMZN'])].slice(0,9);
-  const pickQuotes = await Promise.all(pickTickers.map(t => fetchQuote(t)));
+  // Update header status with live market state
+  const statusEl = document.getElementById('header-status');
+  if(statusEl) statusEl.textContent = isMarketHours ? '🟢 Market Open' : isPreMarket ? '🌅 Pre-Market' : '🔴 Market Closed';
+
+  // Top picks: fetch and rank 32-stock candidate pool in real-time
+  const rankedPicks = await fetchAndRankPicks(trending);
   const picksEl = document.getElementById('top-picks');
-  picksEl.innerHTML = pickTickers.map((t,i) => {
-    const q = pickQuotes[i]; if(!q) return '';
+  picksEl.innerHTML = rankedPicks.map(({ t, q, score }) => {
     const barPct = q.hi52&&q.lo52?Math.max(0,Math.min(100,(q.price-q.lo52)/(q.hi52-q.lo52)*100)):null;
-    const signal = barPct!==null ? (barPct>75?{label:'Near High',cls:'pill-r'}:barPct<30?{label:'Near Low',cls:'pill-g'}:null) : null;
+    const rangeSignal = barPct!==null ? (barPct>75?{label:'Near High',cls:'pill-r'}:barPct<30?{label:'Near Low',cls:'pill-g'}:null) : null;
+    const scoreColor = score>=7?'#16a34a':score>=5?'#d97706':'#dc2626';
     return `<div class="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0 rounded-lg px-1 -mx-1">
       <div class="flex-1 min-w-0 cursor-pointer active:bg-gray-50" onclick="quickAsk('Give me a full analysis of ${esc(t)} with a buy/hold/avoid verdict and entry price target')">
         <div class="flex items-center gap-1.5 flex-wrap">
           <span class="font-bold text-gray-900 text-sm">${esc(t)}</span>
-          ${signal?`<span class="pill ${signal.cls}" style="font-size:9px;padding:1px 6px">${esc(signal.label)}</span>`:''}
+          <span style="background:${scoreColor};color:#fff;border-radius:5px;padding:1px 5px;font-size:9px;font-weight:700">${score}/10</span>
+          ${rangeSignal?`<span class="pill ${rangeSignal.cls}" style="font-size:9px;padding:1px 6px">${esc(rangeSignal.label)}</span>`:''}
           <span class="text-xs text-gray-400 truncate">${esc(q.name.split(' ').slice(0,3).join(' '))}</span>
         </div>
         ${barPct!==null?`<div class="flex items-center gap-1.5 mt-1"><div class="range-bar flex-1" style="max-width:80px"><div class="range-fill ${barPct>65?'bg-green-400':barPct<35?'bg-red-400':'bg-yellow-400'}" style="width:${barPct}%"></div></div><span class="text-xs text-gray-400">${barPct.toFixed(0)}% of 52W</span></div>`:''}
@@ -1389,8 +1455,8 @@ async function loadBrief(){
     </div>`;
   }).join('');
 
-  // Cache all quotes
-  pickTickers.forEach((t,i) => { if(pickQuotes[i]) cacheQuote(t, pickQuotes[i]); });
+  // Cache all quotes for downstream use
+  rankedPicks.forEach(({ t, q }) => { if(q) cacheQuote(t, q); });
   idxQuotes.forEach((q,i) => { if(q) cacheQuote(INDEXES[i].ticker, q); });
 
   document.getElementById('brief-time').textContent = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
@@ -1403,40 +1469,100 @@ async function loadBrief(){
   _briefLoading = false;
   updateMarketCountdown();
 
-  // Fire AI brief (non-blocking)
-  loadAIBrief(idxQuotes, pickQuotes, pickTickers);
+  // Fire AI brief (non-blocking) — pass full ranked picks for richer context
+  loadAIBrief(idxQuotes, rankedPicks, trending);
 }
 
 let _briefAnalyzing = false;
-async function loadAIBrief(idxQuotes, pickQuotes, pickTickers){
+// rankedPicks: [{t, q, score}] from fetchAndRankPicks
+// trending: raw Yahoo trending tickers (for context)
+async function loadAIBrief(idxQuotes, rankedPicks, trending){
   if(_briefAnalyzing) return;
   _briefAnalyzing = true;
   const briefEl = document.getElementById('ai-brief');
+  const spy = idxQuotes[0], qqq = idxQuotes[1], dia = idxQuotes[2], iwm = idxQuotes[3];
+
   if(!getActiveAI()){
-    // Rule-based brief
-    const spy = idxQuotes[0], qqq = idxQuotes[1];
-    if(!spy){ briefEl.textContent = 'Market data unavailable. Check back later.'; return; }
-    const direction = spy.changePct>0.5?'positive territory':'negative territory today';
-    briefEl.textContent = `The S&P 500 is in ${direction} (${fmtN(spy.changePct)}). ${qqq&&qqq.changePct>spy.changePct+0.3?'Tech is leading the market higher — AI and semiconductor stocks are in focus.':'The move is broad-based across most sectors.'} Add an API key in Settings for a deeper AI-powered daily briefing.`;
-    return;
+    // Rule-based brief — richer than before
+    if(!spy){ briefEl.textContent = 'Market data unavailable. Check back later.'; _briefAnalyzing=false; return; }
+    const techLead = qqq && qqq.changePct > spy.changePct + 0.3;
+    const smallCapLead = iwm && iwm.changePct > spy.changePct + 0.5;
+    const topPick = rankedPicks[0];
+    briefEl.textContent = `The S&P 500 is ${spy.changePct>=0?'up':'down'} ${fmtN(spy.changePct)} today. ${techLead?'Tech is outperforming — AI and semiconductor names are in focus.':smallCapLead?'Small-caps are leading — risk appetite is elevated.':'The move is broad-based.'} ${topPick?`Top-ranked pick by momentum: ${topPick.t} (score ${topPick.score}/10) — add an API key in Settings for a full AI analysis.`:'Add an API key in Settings for a deeper AI-powered briefing.'}`;
+    _briefAnalyzing=false; return;
   }
+
   briefEl.innerHTML = '<div class="flex items-center gap-2 opacity-70"><span class="spin" style="border-top-color:white;border-color:rgba(255,255,255,.3)"></span> Analyzing today\'s market…</div>';
   try{
-    const idxSummary = INDEXES.map((idx,i)=>{ const q=idxQuotes[i]; return q?`${idx.ticker}(${idx.name.split('(')[0].trim()}): ${fmt(q.price)} ${fmtN(q.changePct)}`:''; }).filter(Boolean).join(' | ');
-    const topMoved = pickTickers.map((t,i)=>{ const q=pickQuotes[i]; return q?`${t} ${fmtN(q.changePct)}`:null; }).filter(Boolean).slice(0,6).join(', ');
+    // ── Index context ─────────────────────────────────
+    const idxSummary = INDEXES.map((idx,i)=>{
+      const q=idxQuotes[i];
+      return q?`${idx.ticker}: ${fmt(q.price)} ${fmtN(q.changePct)}`:'';
+    }).filter(Boolean).join(' | ');
+
+    // ── Sector snapshot from ranked picks ─────────────
+    const sectorPerf = {};
+    rankedPicks.forEach(({ t, q }) => {
+      const s = SECTOR_MAP[t] || 'Other';
+      if(!sectorPerf[s]) sectorPerf[s] = [];
+      sectorPerf[s].push(q.changePct);
+    });
+    const sectorSummary = Object.entries(sectorPerf)
+      .map(([s, pcts]) => `${s} avg ${(pcts.reduce((a,b)=>a+b,0)/pcts.length).toFixed(1)}%`)
+      .join(', ');
+
+    // ── Top gainers / losers from the picks ───────────
+    const sorted = [...rankedPicks].sort((a,b) => b.q.changePct - a.q.changePct);
+    const gainers = sorted.slice(0,3).map(x=>`${x.t} ${fmtN(x.q.changePct)}`).join(', ');
+    const losers  = sorted.slice(-3).reverse().map(x=>`${x.t} ${fmtN(x.q.changePct)}`).join(', ');
+
+    // ── Best-scoring pick ─────────────────────────────
+    const topPick = rankedPicks[0];
+    const topPickStr = topPick
+      ? `Top momentum pick: ${topPick.t} at ${fmt(topPick.q.price)} (score ${topPick.score}/10, 52W pos ${topPick.q.hi52&&topPick.q.lo52?Math.round((topPick.q.price-topPick.q.lo52)/(topPick.q.hi52-topPick.q.lo52)*100):'?'}%)`
+      : '';
+
+    // ── SPY vs QQQ spread ─────────────────────────────
+    const spread = qqq && spy ? (qqq.changePct - spy.changePct).toFixed(1) : null;
+    const spreadStr = spread ? `QQQ vs SPY spread: ${spread>0?'+':''}${spread}% (${parseFloat(spread)>0.4?'tech outperforming':parseFloat(spread)<-0.4?'broad market outperforming':'neutral rotation'})` : '';
+
+    // ── S&P 52W context ───────────────────────────────
+    const spyPos = spy?.hi52&&spy?.lo52 ? Math.round((spy.price-spy.lo52)/(spy.hi52-spy.lo52)*100) : null;
+    const spyCtx = spyPos!=null ? `SPY is at ${spyPos}% of its 52-week range` : '';
+
+    // ── Trending tickers ──────────────────────────────
+    const trendStr = trending.slice(0,5).join(', ');
+
     const now = new Date();
     const etTime = new Date(now.toLocaleString('en-US',{timeZone:'America/New_York'}));
-    const etHour = etTime.getHours();
-    const timeOfDay = etHour < 12 ? 'morning' : etHour < 17 ? 'afternoon' : 'evening';
     const timeStr = etTime.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
-    const prompt = `Today is ${now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}. Current time: ${timeStr} ET (${timeOfDay}).
 
-Market indexes: ${idxSummary}
-Top movers: ${topMoved}
+    const prompt = `Today: ${now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})} | Time: ${timeStr} ET
 
-Write a sharp, intelligent 3-sentence market briefing for a beginner investor. Cover: (1) overall market mood and what's driving it, (2) which sectors or themes to watch today, (3) one tactical insight — what a smart investor should do or watch for today. Plain English, no jargon, confident and direct tone. Do NOT open with a time-based greeting like "Good morning" — start directly with the market analysis.`;
+MARKET DATA:
+Indexes: ${idxSummary}
+${spreadStr}
+${spyCtx}
+Sector performance today: ${sectorSummary}
+Top gainers: ${gainers}
+Top losers: ${losers}
+${topPickStr}
+Trending on Yahoo Finance: ${trendStr}
+
+Write a sharp, data-driven 3-sentence market briefing for a beginner investor. Use the real data above. Cover:
+1. Overall market mood and what indexes tell us today
+2. Which sector or theme is leading or lagging — and why it matters
+3. One specific, actionable insight: the strongest opportunity or biggest risk to watch right now (name a specific ticker if relevant)
+
+Tone: direct, confident, plain English. No jargon. No time greetings. Start immediately with the market insight.`;
+
     let text = '';
-    await streamAI('You are a sharp senior market strategist giving a daily briefing. Be direct, insightful, and specific — not generic. Never start with time-based greetings. Jump straight into market analysis.', [{role:'user',content:prompt}], 400, chunk=>{ text+=chunk; briefEl.textContent=text; });
+    await streamAI(
+      'You are a senior market strategist. Use the exact data provided — indexes, sectors, specific tickers. Be sharp and specific, not generic. Never open with "Good morning" or similar.',
+      [{role:'user',content:prompt}],
+      450,
+      chunk=>{ text+=chunk; briefEl.textContent=text; }
+    );
   } catch(e){ briefEl.innerHTML = '<p class="text-red-300 text-sm">AI brief unavailable. Check your API key in Settings.</p>'; }
   finally { _briefAnalyzing = false; }
 }
@@ -1908,8 +2034,8 @@ async function analyzeScreenshot(file, prompt){
     const d = await resp.json();
     text = d.content?.[0]?.text || '';
   } else {
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`;
-    const resp=await fetch(url,{method:'POST',headers:{'content-type':'application/json','Authorization':`Bearer ${geminiKey}`},
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+    const resp=await fetch(url,{method:'POST',headers:{'content-type':'application/json'},
       body:JSON.stringify({contents:[{parts:[
         {inline_data:{mime_type:mediaType,data:base64}},
         {text:prompt}

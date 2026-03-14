@@ -984,6 +984,7 @@ function saveSettings(){
   aiPref = document.getElementById('settings-ai-pref').value;
   userName = document.getElementById('settings-name').value.trim();
   sessionStorage.setItem('msa_key', apiKey);    localStorage.removeItem('msa_key');
+  if(geminiKey && !geminiKey.startsWith('AIza')) toast('⚠️ Gemini key looks wrong — it should start with "AIza". Get yours at aistudio.google.com');
   sessionStorage.setItem('msa_gemini', geminiKey); localStorage.removeItem('msa_gemini');
   localStorage.setItem('msa_ai_pref', aiPref);
   localStorage.setItem('msa_name', userName);
@@ -1044,7 +1045,7 @@ async function streamAI(systemPrompt, messages, maxTokens, onChunk, signal){
         method:'POST',signal: ctrl.signal,headers:{'content-type':'application/json'},
         body:JSON.stringify({system_instruction:{parts:[{text:systemPrompt}]},contents,generationConfig:{maxOutputTokens:maxTokens}})
       });
-      if(!resp.ok){const e=await resp.json();throw new Error('Gemini: '+(e.error?.message||resp.status));}
+      if(!resp.ok){const e=await resp.json();const msg=e.error?.message||resp.status;const hint=(resp.status===401||resp.status===403)?' — Get a free key at aistudio.google.com/app/apikey':'';throw new Error('Gemini: '+msg+hint);}
       const reader=resp.body.getReader(),dec=new TextDecoder();
       while(true){
         const{done,value}=await reader.read();if(done)break;

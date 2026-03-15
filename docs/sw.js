@@ -48,7 +48,7 @@ self.addEventListener('fetch', (event) => {
 
   // Pass through non-GET requests and cross-origin API calls
   if (event.request.method !== 'GET') return;
-  if (url.hostname !== self.location.hostname && !url.pathname.startsWith('/')) return;
+  if (url.hostname !== self.location.hostname) return;
 
   // Network-first for HTML navigation (always gets latest app);
   // cache-first for everything else (JS, CSS, images)
@@ -76,7 +76,7 @@ self.addEventListener('fetch', (event) => {
               caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
             }
             return response;
-          }).catch(() => caches.match('./index.html'));
+          }).catch(() => new Response('', {status:503,statusText:'Offline'}));
         })
       );
     }

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>My Stock Analyst</title>
 
   <!-- PWA / Home Screen -->
@@ -145,7 +145,7 @@
     .card{background:#fff;border-radius:18px;box-shadow:0 1px 8px rgba(0,0,0,.08)}
     .gain{color:#16a34a}.loss{color:#dc2626}.warn{color:#d97706}
     .pill{display:inline-flex;align-items:center;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;gap:3px}
-    .pill-g{background:#dcfce7;color:#15803d}.pill-r{background:#fee2e2;color:#b91c1c}.pill-y{background:#fef3c7;color:#92400e}.pill-b{background:#dbeafe;color:#1d4ed8}.pill-gr{background:#f1f5f9;color:#475569}
+    .pill-g{background:#dcfce7;color:#15803d}.pill-r{background:#fee2e2;color:#b91c1c}.pill-y{background:#fef3c7;color:#92400e}.pill-b{background:#dbeafe;color:#1d4ed8}.pill-gr{background:#f1f5f9;color:#475569}.pill-bl{background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;cursor:pointer}
     .btn{border-radius:12px;padding:12px 16px;font-weight:600;font-size:15px;cursor:pointer;border:none;transition:opacity .15s;display:inline-flex;align-items:center;justify-content:center;gap:6px}
     .btn:active{opacity:.8}.btn-primary{background:#2563eb;color:#fff;width:100%}
     .btn-outline{background:#fff;border:1.5px solid #e2e8f0;color:#475569}
@@ -162,7 +162,7 @@
     .metric-row:last-child{border-bottom:none}
     .metric-label{font-size:13px;color:#64748b;display:flex;align-items:center;gap:5px}
     .metric-val{font-size:14px;font-weight:700;color:#1e293b}
-    .tipbtn{width:16px;height:16px;border-radius:50%;background:#e2e8f0;color:#94a3b8;font-size:10px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+    .tipbtn{width:28px;height:28px;min-width:28px;border-radius:50%;background:#e2e8f0;color:#94a3b8;font-size:10px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
     .range-bar{height:6px;background:#e2e8f0;border-radius:3px;position:relative;overflow:visible}
     .range-fill{height:100%;border-radius:3px}
     .range-dot{width:12px;height:12px;border-radius:50%;background:#2563eb;border:2px solid #fff;box-shadow:0 0 0 2px #2563eb;position:absolute;top:50%;transform:translate(-50%,-50%)}
@@ -221,7 +221,7 @@
     body.dark .insight-buy{background:#14532d;color:#86efac}
     body.dark .insight-risk{background:#431407;color:#fdba74}
     body.dark .insight-info{background:#1e3a5f;color:#93c5fd}
-    body.dark #settings-modal>div,body.dark #import-modal>div,body.dark #onboarding-modal>div,body.dark #auth-modal>div,body.dark #conflict-modal>div,body.dark #alert-modal>div{background:#1e293b}
+    body.dark #settings-modal>div,body.dark #import-modal>div,body.dark #onboarding-modal>div,body.dark #auth-modal>div,body.dark #conflict-modal>div,body.dark #alert-modal>div,body.dark #price-alert-modal>div{background:#1e293b}
     body.dark .sticky{background:#1e293b!important}
     body.dark .range-bar{background:#334155}
     body.dark .copy-btn{color:#475569}
@@ -269,12 +269,12 @@
     </div>
   </div>
   <div class="max-w-lg mx-auto flex border-t border-gray-100">
-    <button class="tab-btn tab-active" onclick="switchTab('brief',this)">Brief</button>
-    <button class="tab-btn" onclick="switchTab('invest',this)">Invest</button>
-    <button class="tab-btn" onclick="switchTab('analyst',this)">Analyst</button>
-    <button class="tab-btn" onclick="switchTab('portfolio',this)">Portfolio</button>
-    <button class="tab-btn" onclick="switchTab('watch',this)">Watch</button>
-    <button class="tab-btn" onclick="switchTab('earn',this)">Earn</button>
+    <button class="tab-btn tab-active" onclick="switchTab('brief',this)">📰 Brief</button>
+    <button class="tab-btn" onclick="switchTab('invest',this)">💡 Invest</button>
+    <button class="tab-btn" onclick="switchTab('analyst',this)">🤖 Analyst</button>
+    <button class="tab-btn" onclick="switchTab('portfolio',this)">📊 Portfolio</button>
+    <button class="tab-btn" onclick="switchTab('watch',this)">⭐ Watch</button>
+    <button class="tab-btn" onclick="switchTab('earn',this)">💰 Earn</button>
   </div>
 </div>
 
@@ -414,6 +414,11 @@
         Hi! I'm your personal stock analyst. I use real market data and AI to help you make smarter investment decisions.<br><br>
         Ask me to analyze any stock, compare options, or get investment ideas. I'll explain everything in simple terms — no finance jargon!<br><br>
         <em class="text-gray-500 text-xs">Type below or tap a quick button above.</em>
+        <div class="flex flex-wrap gap-2 mt-3">
+          <button class="pill pill-bl" onclick="quickAsk('Is AAPL a buy right now?')">Is AAPL a buy?</button>
+          <button class="pill pill-bl" onclick="quickAsk('Analyze NVDA — is it overvalued?')">Analyze NVDA</button>
+          <button class="pill pill-bl" onclick="quickAsk('What is a P/E ratio and why does it matter?')">What is P/E ratio?</button>
+        </div>
       </div>
     </div>
 
@@ -645,12 +650,18 @@
     </div>
     <div>
       <label class="text-xs font-semibold text-gray-500 mb-1 block">Anthropic API Key (Claude)</label>
-      <input id="settings-key" type="password" placeholder="sk-ant-api03-…" />
+      <div class="relative flex items-center gap-2">
+        <input id="settings-key" type="password" placeholder="sk-ant-api03-…" style="flex:1" />
+        <button type="button" onclick="toggleKeyVis('settings-key')" style="background:none;border:1.5px solid #e2e8f0;border-radius:8px;padding:8px 10px;cursor:pointer;font-size:16px;flex-shrink:0;line-height:1" title="Show/hide key">👁</button>
+      </div>
       <p class="text-xs text-gray-400 mt-1">Get free key: <strong>console.anthropic.com</strong></p>
     </div>
     <div>
       <label class="text-xs font-semibold text-gray-500 mb-1 block">Google Gemini API Key</label>
-      <input id="settings-gemini-key" type="password" placeholder="AIza…" />
+      <div class="relative flex items-center gap-2">
+        <input id="settings-gemini-key" type="password" placeholder="AIza…" style="flex:1" />
+        <button type="button" onclick="toggleKeyVis('settings-gemini-key')" style="background:none;border:1.5px solid #e2e8f0;border-radius:8px;padding:8px 10px;cursor:pointer;font-size:16px;flex-shrink:0;line-height:1" title="Show/hide key">👁</button>
+      </div>
       <p class="text-xs text-gray-400 mt-1">Get free key: <strong>aistudio.google.com</strong></p>
     </div>
     <div>
@@ -748,7 +759,7 @@
       <div class="font-bold text-gray-900 text-lg">Notification Settings</div>
       <button onclick="closeModal('alert-modal')" class="text-gray-400 text-2xl leading-none">&times;</button>
     </div>
-    <div class="flex items-center justify-between">
+    <div class="flex items-center justify-between" style="display:none!important">
       <div>
         <div class="font-semibold text-gray-800 text-sm">Push Notifications</div>
         <div class="text-xs text-gray-400 mt-0.5">Get alerted when your price targets are hit</div>
@@ -775,6 +786,31 @@
     <div class="flex gap-2 mt-4">
       <button id="chart-ask-btn" class="btn btn-primary" style="flex:1">AI Analysis →</button>
       <button id="chart-watch-btn" class="btn btn-outline btn-sm" style="min-width:110px;flex-shrink:0">☆ Watchlist</button>
+    </div>
+  </div>
+</div>
+
+<!-- Price Alert Modal (UX-2) -->
+<div id="price-alert-modal" onclick="if(event.target===this)closeModal('price-alert-modal')" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:700;align-items:flex-end;justify-content:center" aria-hidden="true">
+  <div class="bg-white w-full rounded-t-3xl p-6 space-y-4" style="max-height:75vh;overflow-y:auto;max-width:512px;margin:0 auto">
+    <div class="flex items-center justify-between">
+      <div class="font-bold text-gray-900 text-lg" id="alert-modal-title">Set Price Alert</div>
+      <button onclick="closeModal('price-alert-modal')" class="text-gray-400 text-2xl leading-none">&times;</button>
+    </div>
+    <div class="space-y-3">
+      <div>
+        <label class="text-xs font-semibold text-gray-500 mb-1 block">Target Price</label>
+        <input id="alert-price-input" type="number" placeholder="Target price" min="0" step="any" />
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-gray-500 mb-1 block">Direction</label>
+        <select id="alert-direction-input">
+          <option value="above">Above — alert when price goes above target</option>
+          <option value="below">Below — alert when price drops below target</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="confirmPriceAlert()">Set Alert</button>
+      <button onclick="closeModal('price-alert-modal')" class="w-full text-center text-sm text-gray-400 pb-1" style="background:none;border:none;cursor:pointer">Cancel</button>
     </div>
   </div>
 </div>
@@ -952,13 +988,14 @@ function closeModal(id) {
 }
 
 function esc(s){ const d=document.createElement('div'); d.textContent=s??''; return d.innerHTML; }
+function escAttr(s){ return esc(s).replace(/'/g,"&#39;"); }
 function fmt(n, dec=2){ return n==null?'–':'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec}); }
 function fmtN(n, dec=2){ return (n==null||isNaN(n))?'–':(n>=0?'+':'')+n.toFixed(dec)+'%'; }
 function fmtB(n){ if(!n)return'–'; if(n>=1e12) return '$'+(n/1e12).toFixed(2)+'T'; if(n>=1e9) return '$'+(n/1e9).toFixed(2)+'B'; if(n>=1e6) return '$'+(n/1e6).toFixed(2)+'M'; return '$'+n.toLocaleString(); }
 function timeAgo(ts){ const s=Math.floor((Date.now()/1000)-ts); if(s<60) return s+'s ago'; if(s<3600) return Math.floor(s/60)+'m ago'; if(s<86400) return Math.floor(s/3600)+'h ago'; return Math.floor(s/86400)+'d ago'; }
 
 let toastT;
-function toast(msg){ const e=document.getElementById('toast'); e.textContent=msg; e.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>e.classList.remove('show'),2800); }
+function toast(msg){ const e=document.getElementById('toast'); e.classList.remove('show'); void e.offsetWidth; e.textContent=msg; e.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>e.classList.remove('show'),2800); }
 
 function showTip(key){ const t=TIPS[key]; if(!t)return; document.getElementById('tip-title').textContent=t.title; document.getElementById('tip-body').textContent=t.body; document.getElementById('tip-popup').classList.add('open'); }
 
@@ -968,6 +1005,11 @@ function pctColor(v){ return v==null?'text-gray-400':v>=0?'gain':'loss'; }
 // ══════════════════════════════════════════════════════
 // SETTINGS
 // ══════════════════════════════════════════════════════
+function toggleKeyVis(id){
+  const el = document.getElementById(id);
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
 function openSettings(){
   document.getElementById('settings-key').value = apiKey;
   document.getElementById('settings-gemini-key').value = geminiKey;
@@ -1103,7 +1145,16 @@ const PROXIES = [
 async function tryFetch(url, timeout=7000){
   for(const proxy of PROXIES){
     try{
-      const r = await fetch(proxy(url),{signal:AbortSignal.timeout(timeout)});
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), timeout);
+      let r;
+      try {
+        r = await fetch(proxy(url), {signal: ctrl.signal});
+        clearTimeout(tid);
+      } catch(e) {
+        clearTimeout(tid);
+        throw e;
+      }
       if(!r.ok) continue;
       const d = await r.json();
       if(d && !d.error) return d;
@@ -1210,7 +1261,9 @@ async function fetchQuote(ticker){
     const change = price-prev, changePct = prev?(change/prev*100):0;
     return { ticker:ticker.toUpperCase(), name:m.longName||m.shortName||ticker, price, change, changePct,
       hi52:m.fiftyTwoWeekHigh, lo52:m.fiftyTwoWeekLow, volume:m.regularMarketVolume,
-      marketCap:m.marketCap, currency:m.currency||'USD', pe:m.trailingPE };
+      marketCap:m.marketCap, currency:m.currency||'USD', pe:m.trailingPE,
+      preMarketPrice: m.preMarketPrice || null,
+      postMarketPrice: m.postMarketPrice || null };
   } catch{ return null; }
 }
 
@@ -1238,7 +1291,8 @@ async function fetchFundamentals(ticker){
     totalDebt: fd.totalDebt?.raw, debtToEquity: fd.debtToEquity?.raw,
     currentRatio: fd.currentRatio?.raw, freeCashflow: fd.freeCashflow?.raw,
     trailingPE: ks.trailingEps?.raw && fd.currentPrice?.raw ? fd.currentPrice.raw/ks.trailingEps.raw : null,
-    forwardPE: fd.forwardEps?.raw && fd.currentPrice?.raw ? fd.currentPrice.raw/fd.forwardEps.raw : null,
+    forwardPE: ks?.forwardEps?.raw && fd?.currentPrice?.raw ?
+      Math.round(fd.currentPrice.raw / ks.forwardEps.raw * 10) / 10 : null,
     pegRatio: ks.pegRatio?.raw, priceToBook: ks.priceToBook?.raw,
     priceToSales: ks.priceToSalesTrailing12Months?.raw,
     evToEbitda: ks.enterpriseToEbitda?.raw, beta: ks.beta?.raw,
@@ -1323,11 +1377,12 @@ async function fetchAndRankPicks(trending = []) {
 // ══════════════════════════════════════════════════════
 // TODAY'S BRIEF
 // ══════════════════════════════════════════════════════
-async function loadBrief(){
+async function loadBrief(force=false, autoRefresh=false){
   // Note: _briefLastFetch is set only after successful data load (B2-2)
   _briefLoading = true;
   _updateLastUpdated();
   document.getElementById('header-status').textContent = 'Loading market data…';
+  try {
 
   // Load indexes in parallel with trending
   const [idxQuotes, trending] = await Promise.all([
@@ -1338,7 +1393,6 @@ async function loadBrief(){
   // Surface a visible error if all index fetches failed (proxy / network outage)
   const anyIndexLoaded = idxQuotes.some(Boolean);
   if(!anyIndexLoaded){
-    _briefLoading = false;
     document.getElementById('header-status').textContent = 'Data unavailable';
     const idxEl2 = document.getElementById('indexes-list');
     idxEl2.innerHTML = `<div class="text-sm text-red-500 py-2">Market data unavailable — tap <strong>Refresh</strong> to retry.</div>`;
@@ -1364,11 +1418,16 @@ async function loadBrief(){
   const spy = idxQuotes[0], qqq = idxQuotes[1], dia = idxQuotes[2], iwm = idxQuotes[3];
   const pulseEl = document.getElementById('market-pulse');
   const now = new Date();
-  // Use America/New_York so DST is handled automatically
-  const etNow = new Date(now.toLocaleString('en-US', {timeZone:'America/New_York'}));
-  const etHour = etNow.getHours(), etMin = etNow.getMinutes(), etDay = etNow.getDay();
-  const isWeekend = etDay === 0 || etDay === 6;
-  const isHolidayToday = isNYSEHoliday(etNow);
+  // Use Intl.DateTimeFormat for reliable ET parsing (avoids toLocaleString Date parsing bugs on some Android)
+  const { etHour, etMin, etDay: etDayStr } = getETparts(now);
+  const isWeekend = ['Sun','Sat'].includes(etDayStr);
+  // For NYSE holiday check, reconstruct a date object using numeric ET parts
+  const _etParts2 = new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
+  const _etY = parseInt(_etParts2.find(p=>p.type==='year')?.value||'0');
+  const _etM = parseInt(_etParts2.find(p=>p.type==='month')?.value||'0')-1;
+  const _etD = parseInt(_etParts2.find(p=>p.type==='day')?.value||'0');
+  const etDateObj = new Date(_etY, _etM, _etD);
+  const isHolidayToday = isNYSEHoliday(etDateObj);
   const isMarketHours = !isWeekend && !isHolidayToday && (etHour > 9 || (etHour === 9 && etMin >= 30)) && etHour < 16;
   const isPreMarket = !isWeekend && !isHolidayToday && etHour >= 4 && (etHour < 9 || (etHour === 9 && etMin < 30));
 
@@ -1438,7 +1497,7 @@ async function loadBrief(){
     const rangeSignal = barPct!==null ? (barPct>75?{label:'Near High',cls:'pill-r'}:barPct<30?{label:'Near Low',cls:'pill-g'}:null) : null;
     const scoreColor = score>=7?'#16a34a':score>=5?'#d97706':'#dc2626';
     return `<div class="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0 rounded-lg px-1 -mx-1">
-      <div class="flex-1 min-w-0 cursor-pointer active:bg-gray-50" onclick="quickAsk('Give me a full analysis of ${esc(t)} with a buy/hold/avoid verdict and entry price target')">
+      <div class="flex-1 min-w-0 cursor-pointer active:bg-gray-50" onclick="quickAsk('Give me a full analysis of ${escAttr(t)} with a buy/hold/avoid verdict and entry price target')">
         <div class="flex items-center gap-1.5 flex-wrap">
           <span class="font-bold text-gray-900 text-sm">${esc(t)}</span>
           <span style="background:${scoreColor};color:#fff;border-radius:5px;padding:1px 5px;font-size:9px;font-weight:700">${score}/10</span>
@@ -1446,13 +1505,15 @@ async function loadBrief(){
           <span class="text-xs text-gray-400 truncate">${esc(q.name.split(' ').slice(0,3).join(' '))}</span>
         </div>
         ${barPct!==null?`<div class="flex items-center gap-1.5 mt-1"><div class="range-bar flex-1" style="max-width:80px"><div class="range-fill ${barPct>65?'bg-green-400':barPct<35?'bg-red-400':'bg-yellow-400'}" style="width:${barPct}%"></div></div><span class="text-xs text-gray-400">${barPct.toFixed(0)}% of 52W</span></div>`:''}
+        ${q.preMarketPrice?`<span class="text-xs text-gray-400">Pre: ${fmt(q.preMarketPrice)}</span>`:q.postMarketPrice?`<span class="text-xs text-gray-400">Post: ${fmt(q.postMarketPrice)}</span>`:''}
       </div>
-      <div class="text-right ml-2 cursor-pointer" onclick="quickAsk('Give me a full analysis of ${esc(t)} with a buy/hold/avoid verdict and entry price target')">
+      <div class="text-right ml-2 cursor-pointer" onclick="quickAsk('Give me a full analysis of ${escAttr(t)} with a buy/hold/avoid verdict and entry price target')">
         <div class="font-bold text-gray-900 text-sm">${fmt(q.price)}</div>
         <div class="text-xs font-semibold ${q.change>=0?'gain':'loss'}">${fmtN(q.changePct)}</div>
+        <span class="text-xs text-gray-400 ml-1" title="Prices delayed ~15 minutes">~15m</span>
       </div>
-      <button onclick="event.stopPropagation();showChart('${esc(t)}')" style="background:none;border:none;cursor:pointer;padding:4px 4px;font-size:15px;line-height:1;flex-shrink:0;color:#94a3b8" title="View 1Y chart">📈</button>
-      <button onclick="toggleWatchlist('${esc(t)}')" id="wl-star-${esc(t)}" style="background:none;border:none;cursor:pointer;padding:4px 6px;font-size:18px;line-height:1;flex-shrink:0;color:${watchlist.includes(t)?'#f59e0b':'#cbd5e1'}" title="Add to watchlist">${watchlist.includes(t)?'★':'☆'}</button>
+      <button onclick="event.stopPropagation();showChart('${escAttr(t)}')" style="background:none;border:none;cursor:pointer;padding:4px 4px;font-size:15px;line-height:1;flex-shrink:0;color:#94a3b8" title="View 1Y chart">📈</button>
+      <button onclick="toggleWatchlist('${escAttr(t)}')" id="wl-star-${escAttr(t)}" style="background:none;border:none;cursor:pointer;padding:4px 6px;font-size:18px;line-height:1;flex-shrink:0;color:${watchlist.includes(t)?'#f59e0b':'#cbd5e1'}" title="Add to watchlist">${watchlist.includes(t)?'★':'☆'}</button>
     </div>`;
   }).join('');
 
@@ -1467,11 +1528,16 @@ async function loadBrief(){
   // Set fetch timestamp only after successful data load (B2-2)
   _briefLastFetch = Date.now();
   _updateLastUpdated();
-  _briefLoading = false;
   updateMarketCountdown();
 
   // Fire AI brief (non-blocking) — pass full ranked picks for richer context
-  loadAIBrief(idxQuotes, rankedPicks, trending);
+  // Skip AI brief on auto-refresh to avoid consuming API quota (UX-12)
+  if (!autoRefresh) {
+    loadAIBrief(idxQuotes, rankedPicks, trending);
+  }
+  } finally {
+    _briefLoading = false;
+  }
 }
 
 let _briefAnalyzing = false;
@@ -1535,8 +1601,10 @@ async function loadAIBrief(idxQuotes, rankedPicks, trending){
     const trendStr = trending.slice(0,5).join(', ');
 
     const now = new Date();
-    const etTime = new Date(now.toLocaleString('en-US',{timeZone:'America/New_York'}));
-    const timeStr = etTime.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
+    const { etHour: _aiEtH, etMin: _aiEtM } = getETparts(now);
+    const _aiAmPm = _aiEtH >= 12 ? 'PM' : 'AM';
+    const _aiH12 = _aiEtH % 12 || 12;
+    const timeStr = `${String(_aiH12).padStart(2,'0')}:${String(_aiEtM).padStart(2,'0')} ${_aiAmPm}`;
 
     const prompt = `Today: ${now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})} | Time: ${timeStr} ET
 
@@ -1744,9 +1812,25 @@ function extractTickers(text){
 }
 
 function quickAsk(msg){
+  // UX-7: detect if we're currently on Brief tab before switching
+  const wasOnBrief = document.getElementById('tab-brief')?.classList.contains('active');
   goToTab('analyst');
+  // UX-7: Add "Back to Brief" chip if coming from Brief tab
+  if(wasOnBrief){
+    const chatEl = document.getElementById('chat-messages');
+    if(chatEl){
+      const existing = chatEl.querySelector('.back-to-brief-chip');
+      if(!existing){
+        const chip = document.createElement('div');
+        chip.className = 'back-to-brief-chip text-xs text-blue-500 cursor-pointer mb-2';
+        chip.textContent = '← Back to Brief';
+        chip.onclick = () => goToTab('brief');
+        chatEl.insertBefore(chip, chatEl.firstChild);
+      }
+    }
+  }
   document.getElementById('chat-input').value = msg;
-  setTimeout(handleChat, 100);
+  handleChat();
 }
 
 let _chatBusy = false;
@@ -1859,7 +1943,10 @@ STYLE RULES:
 
   const messages = [...chatHistory.slice(-10)];
   if(contextData || newsContext){
-    const lastUserIdx = messages.findLastIndex(m=>m.role==='user');
+    let lastUserIdx = -1;
+    for(let i = messages.length - 1; i >= 0; i--) {
+      if(messages[i].role === 'user') { lastUserIdx = i; break; }
+    }
     if(lastUserIdx>=0) messages[lastUserIdx] = {role:'user', content: messages[lastUserIdx].content + '\n\nCURRENT MARKET DATA:'+contextData+(newsContext?'\n\nRECENT NEWS:'+newsContext:'')};
   }
 
@@ -1869,6 +1956,8 @@ STYLE RULES:
     let text='';
     await streamAI(systemPrompt, messages, 2000, chunk=>{ text+=chunk; loadEl.textContent=text; scrollChat(); });
     loadEl.classList.remove('streaming');
+    // UX-10: Apply basic markdown rendering after streaming completes
+    loadEl.innerHTML = renderMarkdown(loadEl.textContent);
     chatHistory.push({role:'assistant',content:text});
     addCopyBtn(loadEl);
     // Add watchlist star buttons for mentioned tickers
@@ -1890,9 +1979,19 @@ STYLE RULES:
       chatEl.appendChild(starRow);
     }
   } catch(err){
-    // Silently discard user-initiated aborts (tab switch); show error only for real failures (B2-3)
+    // BUG-006: Handle AbortError — show [cancelled] if partial text streamed, otherwise remove spinner
     if(err?.name === 'AbortError' || err?.message?.includes('aborted')){
-      if(loadEl && loadEl.querySelector('.spin')) loadEl.remove();
+      if (loadEl && !loadEl.querySelector('.spin')) {
+        loadEl.classList.remove('streaming');
+        loadEl.innerHTML += '<em class="text-gray-400 text-xs"> [cancelled]</em>';
+      } else if (loadEl) {
+        loadEl.remove();
+      }
+      _chatBusy = false;
+      document.getElementById('chat-input').disabled = false;
+      document.getElementById('chat-input').nextElementSibling.disabled = false;
+      document.getElementById('chat-input').nextElementSibling.style.opacity = '1';
+      return;
     } else {
       loadEl.className='chat-msg-ai';
       loadEl.textContent=`Error: ${err.message}. Please check your API key in Settings.`;
@@ -1926,7 +2025,17 @@ function addCopyBtn(msgEl){
   };
   msgEl.parentNode.insertBefore(btn, msgEl.nextSibling);
 }
-function scrollChat(){ const el=document.getElementById('chat-messages'); el.scrollTop=el.scrollHeight; window.scrollTo(0,document.body.scrollHeight); }
+function scrollChat(){ const el=document.getElementById('chat-messages'); if(el) el.scrollTop=el.scrollHeight; }
+
+// UX-10: Basic markdown rendering applied after streaming completes
+function renderMarkdown(text){
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^[-•] (.+)/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/s, '<ul class="list-disc pl-4 space-y-1">$1</ul>')
+    .replace(/─{3,}|━{3,}|—{3,}/g, '<hr class="border-gray-200 my-2">');
+}
 
 document.getElementById('chat-input').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); handleChat(); } });
 document.getElementById('brief-search').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); briefSearch(); } });
@@ -2047,14 +2156,12 @@ async function analyzeScreenshot(file, prompt){
     text=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
   }
 
-  const match = text.match(/\[[\s\S]*\]/);
-  if(!match){
-    // Note: do not log AI response to console (potential data leakage)
-    throw new Error('AI could not read holdings. Response: ' + text.slice(0,120));
+  // BUG-032: Use non-greedy regex and try multiple matches
+  let parsed = null;
+  for(const m of text.matchAll(/\[[\s\S]*?\]/g)){
+    try{ parsed = JSON.parse(m[0]); if(Array.isArray(parsed)) break; }catch{}
   }
-  let parsed;
-  try{ parsed = JSON.parse(match[0]); } catch(e){ throw new Error('JSON parse failed: ' + match[0].slice(0,80)); }
-  if(!Array.isArray(parsed)) throw new Error('Invalid response format');
+  if(!parsed) throw new Error('AI could not read holdings...');
   return parsed;
 }
 
@@ -2169,7 +2276,8 @@ async function addPosition(){
     } else { portfolio[ticker]={shares,avgCost:cost}; }
     savePortfolio();
     // Also persist to cloud DB if signed in — use merged portfolio values, not raw inputs (B2-1)
-    await DB.savePosition(ticker, portfolio[ticker].shares, portfolio[ticker].avgCost);
+    // BUG-001: Wrap in catch so DB failure never leaves the Add button disabled
+    await DB.savePosition(ticker, portfolio[ticker].shares, portfolio[ticker].avgCost).catch(e => console.warn('DB sync failed:', e));
     ['p-ticker','p-shares','p-cost-p'].forEach(id=>document.getElementById(id).value='');
     toast(`Added ${shares} × ${ticker}`);
     renderPortfolio();
@@ -2233,7 +2341,7 @@ function renderPortfolio(){
       <div class="flex items-start justify-between mb-2">
         <div>
           <div class="font-bold text-gray-900">${esc(r.t)} <span class="text-xs text-gray-400 font-normal">${r.q?esc(r.q.name.split(' ').slice(0,3).join(' ')):''}</span>${scoreBadge}</div>
-          <div class="text-xs text-gray-400">${parseFloat(r.pos.shares).toLocaleString(undefined,{maximumFractionDigits:4})} shares · avg ${fmt(r.pos.avgCost)}</div>
+          <div class="text-xs text-gray-400">${parseFloat(r.pos.shares).toLocaleString(undefined,{maximumFractionDigits:4})} shares · avg ${fmt(r.pos.avgCost)}${r.q?.preMarketPrice?` · <span class="text-gray-400">Pre: ${fmt(r.q.preMarketPrice)}</span>`:r.q?.postMarketPrice?` · <span class="text-gray-400">Post: ${fmt(r.q.postMarketPrice)}</span>`:''}</div>
         </div>
         <div class="text-right">
           <div class="font-bold text-gray-900">${fmt(r.value)}</div>
@@ -2242,10 +2350,10 @@ function renderPortfolio(){
         </div>
       </div>
       <div class="flex justify-between text-xs border-t border-gray-50 pt-2">
-        <span class="text-gray-500">Price: <strong class="text-gray-800">${fmt(r.price)}</strong>${r.q?` <span class="${r.q.changePct>=0?'gain':'loss'}">${r.q.changePct>=0?'▲':'▼'}${Math.abs(r.q.changePct).toFixed(2)}%</span>`:''}</span>
+        <span class="text-gray-500">Price: <strong class="text-gray-800">${fmt(r.price)}</strong><span class="text-xs text-gray-400 ml-1" title="Prices delayed ~15 minutes">~15m</span>${r.q?` <span class="${r.q.changePct>=0?'gain':'loss'}">${r.q.changePct>=0?'▲':'▼'}${Math.abs(r.q.changePct).toFixed(2)}%</span>`:''}</span>
         <div class="flex items-center gap-3">
-          <button onclick="showChart('${esc(r.t)}')" title="View 1Y chart" style="background:none;border:none;cursor:pointer;padding:0;font-size:14px;line-height:1;color:#94a3b8">📈</button>
-          <button class="text-red-400 font-semibold" onclick="removePosition('${esc(r.t)}')">Remove</button>
+          <button onclick="showChart('${escAttr(r.t)}')" title="View 1Y chart" style="background:none;border:none;cursor:pointer;padding:0;font-size:14px;line-height:1;color:#94a3b8">📈</button>
+          <button class="text-red-400 font-semibold" onclick="removePosition('${escAttr(r.t)}')">Remove</button>
         </div>
       </div>
     </div>`;
@@ -2259,7 +2367,8 @@ function renderPortfolio(){
   const missing = entries.filter(([t])=>!quotes[t]);
   if(missing.length && !_portfolioRefreshing){
     _portfolioRefreshing = true;
-    Promise.all(missing.map(([t])=>fetchQuote(t).then(q=>{if(q)cacheQuote(t,q);}))).then(()=>{ _portfolioRefreshing=false; renderPortfolio(); }).catch(()=>{ _portfolioRefreshing=false; });
+    // BUG-020: Reset _portfolioRefreshing AFTER the recursive renderPortfolio() call
+    Promise.all(missing.map(([t])=>fetchQuote(t).then(q=>{if(q)cacheQuote(t,q);}))).then(()=>{ renderPortfolio(); _portfolioRefreshing=false; }).catch(()=>{ _portfolioRefreshing=false; });
   }
 }
 
@@ -2395,7 +2504,7 @@ async function analyzePortfolio(){
   }
 
   // ── Portfolio-level metrics ─────────────────────────────
-  let totalValue = 0, totalCost = 0, wBeta = 0, wPE = 0, wPEWeight = 0;
+  let totalValue = 0, totalCost = 0, wBeta = 0, wBetaValue = 0, wPE = 0, wPEWeight = 0;
   const sectorSet = new Set();
   const positionData = entries.map(([t, pos]) => {
     const q = quotes[t], f = fundamentalsCache[t];
@@ -2405,7 +2514,8 @@ async function analyzePortfolio(){
     const pe = f?.forwardPE ?? f?.trailingPE ?? q?.pe;
     if(pe && pe > 0 && pe < 100) { wPE += pe * value; wPEWeight += value; }
     const beta = f?.beta;
-    if(beta != null) wBeta += beta * value;
+    // BUG-011: Only accumulate beta-weighted value for positions that actually have beta data
+    if(beta != null) { wBeta += beta * value; wBetaValue += value; }
     const sector = f?.sector || SECTOR_MAP[t] || 'Other';
     sectorSet.add(sector);
     const pnlPct = pos.avgCost > 0 ? ((price/pos.avgCost - 1) * 100) : null;
@@ -2413,7 +2523,8 @@ async function analyzePortfolio(){
     return { t, pos, q, f, price, value, cost, pnlPct, sector, sc };
   });
   const avgPE    = wPEWeight > 0 ? wPE / wPEWeight : null;
-  const portBeta = totalValue > 0 ? wBeta / totalValue : null;
+  // BUG-011: Divide by wBetaValue (only positions with known beta) not totalValue
+  const portBeta = wBetaValue > 0 ? wBeta / wBetaValue : null;
   const scores   = positionData.filter(p => p.sc).map(p => ({ sc: p.sc, w: p.value }));
   const portScore = scores.length
     ? Math.round(scores.reduce((s, x) => s + x.sc.score * x.w, 0) / scores.reduce((s, x) => s + x.w, 0))
@@ -2611,7 +2722,8 @@ setInterval(_updateLastUpdated, 30000);
 setInterval(()=>{
   const active = document.querySelector('.tab-pane.active');
   if(!active) return;
-  if(active.id==='tab-brief' && Date.now()-_briefLastFetch > STALE_MS) refreshBrief();
+  // UX-12: Pass autoRefresh=true to skip AI brief quota consumption on background refresh
+  if(active.id==='tab-brief' && Date.now()-_briefLastFetch > STALE_MS) loadBrief(false, true);
   else if(active.id==='tab-portfolio' && Date.now()-_portfolioLastFetch > STALE_MS && Object.keys(portfolio).length) refreshPortfolio();
 }, 60000); // check every minute
 
@@ -2648,6 +2760,17 @@ function isNYSEHoliday(etDate){
   return NYSE_HOLIDAYS.has(`${y}-${m}-${d}`);
 }
 
+// BUG-026: Reliable ET time parsing via Intl.DateTimeFormat (avoids toLocaleString Date() bugs on Android)
+function getETparts(now){
+  const parts = new Intl.DateTimeFormat('en-US',{
+    timeZone:'America/New_York',
+    hour:'numeric', minute:'numeric',
+    weekday:'short', hour12:false
+  }).formatToParts(now);
+  const get = t => parseInt(parts.find(p=>p.type===t)?.value||'0');
+  return { etHour: get('hour') % 24, etMin: get('minute'), etDay: parts.find(p=>p.type==='weekday')?.value };
+}
+
 let _briefLoading = false;
 function updateMarketCountdown(){
   const el = document.getElementById('header-status');
@@ -2655,9 +2778,13 @@ function updateMarketCountdown(){
   // Don't override if brief is actively loading
   if(_briefLoading) return;
   const now = new Date();
-  const etNow = new Date(now.toLocaleString('en-US', {timeZone:'America/New_York'}));
-  const etHour = etNow.getHours(), etMin = etNow.getMinutes(), etDay = etNow.getDay();
-  const isWeekend = etDay === 0 || etDay === 6;
+  const { etHour, etMin, etDay: etDayStr2 } = getETparts(now);
+  const isWeekend = ['Sun','Sat'].includes(etDayStr2);
+  const _cParts = new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
+  const _cY = parseInt(_cParts.find(p=>p.type==='year')?.value||'0');
+  const _cM = parseInt(_cParts.find(p=>p.type==='month')?.value||'0')-1;
+  const _cD = parseInt(_cParts.find(p=>p.type==='day')?.value||'0');
+  const etNow = new Date(_cY, _cM, _cD, etHour, etMin);
   const isHoliday = isNYSEHoliday(etNow);
   const isMarketHours = !isWeekend && !isHoliday && (etHour > 9 || (etHour === 9 && etMin >= 30)) && etHour < 16;
   const isPreMarket = !isWeekend && !isHoliday && etHour >= 4 && (etHour < 9 || (etHour === 9 && etMin < 30));
@@ -2733,27 +2860,28 @@ function renderWatchlist(){
     if(!q) return `<div class="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0 px-1">
       <div class="flex items-center gap-2 flex-1"><span class="spin" style="width:14px;height:14px;border-width:2px"></span><span class="font-bold text-gray-900 text-sm">${esc(t)}</span></div>
       <div style="display:flex;align-items:center;gap:2px">
-        <button onclick="setAlert('${esc(t)}')" title="Set alert" style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px;opacity:${alerts[t]?'1':'0.4'}">${alerts[t]?'🔔':'🔕'}</button>
-        <button onclick="removeFromWatchlist('${esc(t)}')" style="background:none;border:none;cursor:pointer;color:#f87171;font-size:18px;line-height:1;padding:4px">×</button>
+        <button onclick="setAlert('${escAttr(t)}')" title="Set alert" style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px;opacity:${alerts[t]?'1':'0.4'}">${alerts[t]?'🔔':'🔕'}</button>
+        <button onclick="removeFromWatchlist('${escAttr(t)}')" style="background:none;border:none;cursor:pointer;color:#f87171;font-size:18px;line-height:1;padding:4px">×</button>
       </div>
     </div>`;
     const barPct = q.hi52&&q.lo52 ? Math.max(0,Math.min(100,(q.price-q.lo52)/(q.hi52-q.lo52)*100)) : null;
-    return `<div class="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0 rounded-lg px-1 cursor-pointer" onclick="quickAsk('Give me a full analysis of ${esc(t)} with a buy/hold/avoid verdict and entry price target')">
+    return `<div class="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0 rounded-lg px-1 cursor-pointer" onclick="quickAsk('Give me a full analysis of ${escAttr(t)} with a buy/hold/avoid verdict and entry price target')">
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-1.5 flex-wrap">
           <span class="font-bold text-gray-900 text-sm">${esc(t)}</span>
           <span class="text-xs text-gray-400 truncate">${esc(q.name.split(' ').slice(0,3).join(' '))}</span>
         </div>
         ${barPct!==null?`<div class="flex items-center gap-1.5 mt-1"><div class="range-bar flex-1" style="max-width:80px"><div class="range-fill ${barPct>65?'bg-green-400':barPct<35?'bg-red-400':'bg-yellow-400'}" style="width:${barPct}%"></div></div><span class="text-xs text-gray-400">${barPct.toFixed(0)}% of 52W</span></div>`:''}
+        ${q.preMarketPrice?`<span class="text-xs text-gray-400">Pre: ${fmt(q.preMarketPrice)}</span>`:q.postMarketPrice?`<span class="text-xs text-gray-400">Post: ${fmt(q.postMarketPrice)}</span>`:''}
       </div>
       <div class="text-right mx-2">
-        <div class="font-bold text-gray-900 text-sm">${fmt(q.price)}</div>
+        <div class="font-bold text-gray-900 text-sm">${fmt(q.price)}<span class="text-xs text-gray-400 ml-1" title="Prices delayed ~15 minutes">~15m</span></div>
         <div class="text-xs font-semibold ${q.change>=0?'gain':'loss'}">${fmtN(q.changePct)}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0">
-        <button onclick="event.stopPropagation();showChart('${esc(t)}')" title="View 1Y chart" style="background:none;border:none;cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;opacity:0.6">📈</button>
-        <button onclick="event.stopPropagation();setAlert('${esc(t)}')" title="Set price alert" style="background:none;border:none;cursor:pointer;font-size:15px;line-height:1;padding:2px 4px;opacity:${alerts[t]?'1':'0.45'}">${alerts[t]?'🔔':'🔕'}</button>
-        <button onclick="event.stopPropagation();removeFromWatchlist('${esc(t)}')" style="background:none;border:none;cursor:pointer;color:#f87171;font-size:18px;line-height:1;padding:2px 4px">×</button>
+        <button onclick="event.stopPropagation();showChart('${escAttr(t)}')" title="View 1Y chart" style="background:none;border:none;cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;opacity:0.6">📈</button>
+        <button onclick="event.stopPropagation();setAlert('${escAttr(t)}')" title="Set price alert" style="background:none;border:none;cursor:pointer;font-size:15px;line-height:1;padding:2px 4px;opacity:${alerts[t]?'1':'0.45'}">${alerts[t]?'🔔':'🔕'}</button>
+        <button onclick="event.stopPropagation();removeFromWatchlist('${escAttr(t)}')" style="background:none;border:none;cursor:pointer;color:#f87171;font-size:18px;line-height:1;padding:2px 4px">×</button>
       </div>
     </div>`;
   }).join('');
@@ -2824,32 +2952,32 @@ function briefSearch(){
 // ══════════════════════════════════════════════════════
 function saveAlerts(){ try{ localStorage.setItem('msa_alerts', JSON.stringify(alerts)); }catch(e){ toast('Storage full — alerts may not save.'); } }
 
+let _alertTicker = null;
 function setAlert(ticker){
   const t = ticker.toUpperCase();
+  _alertTicker = t;
   const cur = quotes[t];
   const a = alerts[t];
-  const curStr = cur ? ` (current: $${cur.price.toFixed(2)})` : '';
-  const existingStr = a ? ` [active: ${a.above?'above $'+a.above:''}${a.below?'below $'+a.below:''}]` : '';
-  const val = prompt(
-    `Price alert for ${t}${curStr}${existingStr}\n\nType:\n  "above 200"  — alert when price crosses above $200\n  "below 150"  — alert when price drops below $150\n  "clear"      — remove alert`,
-    a ? (a.above ? 'above '+a.above : 'below '+a.below) : ''
-  );
-  if(val === null) return; // cancelled
-  const trimmed = val.trim().toLowerCase();
-  if(trimmed === 'clear' || trimmed === ''){
-    delete alerts[t];
-    saveAlerts();
-    toast(`Alert cleared for ${t}`);
-    if(document.getElementById('tab-watch').classList.contains('active')) renderWatchlist();
-    return;
-  }
-  const m = trimmed.match(/(above|below)\s*\$?\s*(\d+\.?\d*)/);
-  if(!m){ toast('Format: "above 200" or "below 150"'); return; }
-  const dir = m[1], price = parseFloat(m[2]);
+  document.getElementById('alert-modal-title').textContent = `Set Price Alert for ${t}`;
+  const priceInput = document.getElementById('alert-price-input');
+  const dirInput = document.getElementById('alert-direction-input');
+  priceInput.value = a ? (a.above ?? a.below ?? '') : (cur ? cur.price.toFixed(2) : '');
+  dirInput.value = a?.below != null ? 'below' : 'above';
+  openModal('price-alert-modal', '#alert-price-input');
+}
+
+function confirmPriceAlert(){
+  const t = _alertTicker;
+  if(!t) return;
+  const price = parseFloat(document.getElementById('alert-price-input').value);
+  const dir = document.getElementById('alert-direction-input').value;
+  if(isNaN(price) || price <= 0){ toast('Enter a valid price'); return; }
   alerts[t] = { [dir]: price };
   saveAlerts();
+  closeModal('price-alert-modal');
   toast(`🔔 Alert set: ${t} ${dir} $${price}`);
   if(document.getElementById('tab-watch').classList.contains('active')) renderWatchlist();
+  _alertTicker = null;
 }
 
 function checkAlertsForQuote(ticker, price){
@@ -3098,22 +3226,9 @@ async function signInWithMagicLink(email) {
   }
 }
 
-// ── Push notifications ──
+// ── Push notifications — BUG-004: always show "Coming soon" since VAPID key is a placeholder ──
 async function togglePushNotifications() {
-  if (!VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY.includes('PLACEHOLDER') || VAPID_PUBLIC_KEY.length < 10) {
-    toast('Push notifications not configured');
-    return;
-  }
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    toast('Push notifications not supported in this browser');
-    return;
-  }
-  _pushEnabled = !_pushEnabled;
-  const btn = document.getElementById('push-toggle-btn');
-  const knob = document.getElementById('push-toggle-knob');
-  if (btn) btn.style.background = _pushEnabled ? '#7c3aed' : '#cbd5e1';
-  if (knob) knob.style.transform = _pushEnabled ? 'translateX(24px)' : 'translateX(0)';
-  toast(_pushEnabled ? 'Push notifications enabled' : 'Push notifications disabled');
+  toast('Coming soon — push alerts are not yet configured.');
 }
 
 // ── Account deletion ──
@@ -3202,7 +3317,7 @@ if(!localStorage.getItem('msa_onboarded') && !apiKey && !geminiKey) setTimeout(s
 // ── Global Escape key handler (Fix 0) ──
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
-  ['auth-modal','conflict-modal','settings-modal','alert-modal','onboarding-modal'].forEach(id => {
+  ['auth-modal','conflict-modal','settings-modal','alert-modal','onboarding-modal','price-alert-modal'].forEach(id => {
     const el = document.getElementById(id);
     if (el && el.style.display !== 'none') closeModal(id);
   });

@@ -141,7 +141,7 @@
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f4f8;color:#1e293b;transition:background .2s,color .2s}
     .tab-active{color:#2563eb;font-weight:700;border-bottom:3px solid #2563eb}
-    .tab-btn{padding:12px 0;flex:1;text-align:center;font-size:12px;color:#94a3b8;letter-spacing:.4px;border-bottom:3px solid transparent;transition:all .15s;cursor:pointer}
+    .tab-btn{padding:12px 0;flex:1;text-align:center;font-size:12px;color:#94a3b8;letter-spacing:.4px;border-bottom:3px solid transparent;transition:all .15s;cursor:pointer;white-space:nowrap;overflow:hidden;background:none;border-top:none;border-left:none;border-right:none}
     .card{background:#fff;border-radius:18px;box-shadow:0 1px 8px rgba(0,0,0,.08)}
     .gain{color:#16a34a}.loss{color:#dc2626}.warn{color:#d97706}
     .pill{display:inline-flex;align-items:center;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;gap:3px}
@@ -1594,6 +1594,9 @@ async function loadBrief(force=false, autoRefresh=false){
     const idxEl2 = document.getElementById('indexes-list');
     idxEl2.innerHTML = `<div class="text-sm text-red-500 py-2">Market data unavailable — tap <strong>Refresh</strong> to retry.</div>`;
     document.getElementById('market-pulse').innerHTML = `<div class="text-sm text-gray-400 py-2">Unable to load market data. Check your connection and try again.</div>`;
+    // Clear stale picks so they don't show alongside the error state
+    const picksElErr = document.getElementById('top-picks');
+    if (picksElErr) picksElErr.innerHTML = '';
     return;
   }
 

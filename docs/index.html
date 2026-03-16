@@ -845,6 +845,18 @@ function safeJsonParse(key, fallback){
 let portfolio = safeJsonParse('msa_portfolio', {});
 let quotes = {};
 let fundamentalsCache = {}; // ticker → fetchFundamentals() result, populated by analyzePortfolio
+const _fundOrder = [];
+const MAX_FUND_CACHE = 60;
+function cacheFundamentals(ticker, data) {
+  const existing = _fundOrder.indexOf(ticker);
+  if (existing !== -1) _fundOrder.splice(existing, 1);
+  _fundOrder.push(ticker);
+  fundamentalsCache[ticker] = data;
+  while (_fundOrder.length > MAX_FUND_CACHE) {
+    const evicted = _fundOrder.shift();
+    delete fundamentalsCache[evicted];
+  }
+}
 // Track insertion order for LRU eviction
 let _quotesOrder = [];
 function cacheQuote(ticker, data){
@@ -867,6 +879,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const el = document.getElementById('header-build');
   if(el) el.textContent = BUILD;
 });
+
+function getErrorMsg(context, err) {
+  const isOffline = !navigator.onLine;
+  if (isOffline) return 'You\'re offline — showing last known data.';
+  if (context === 'quote') return 'Market data is slow right now. Try refreshing in 30 seconds.';
+  if (context === 'ai') return 'AI is taking a moment — tap Retry or try again shortly.';
+  if (context === 'ticker-not-found') return `"${err}" wasn't found. Check the symbol (e.g. Berkshire = BRK-B).`;
+  return 'Data temporarily unavailable. Try refreshing.';
+}
 
 const SECTOR_MAP = {
   AAPL:'Tech',MSFT:'Tech',NVDA:'Tech',AMD:'Tech',INTC:'Tech',META:'Tech',
@@ -1050,6 +1071,42 @@ function getActiveAI(){
 
 let _activeStreamController = null;
 
+async function _fetchWithRetry(fetchFn, signal, maxAttempts=3) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    try {
+      const resp = await fetchFn();
+      // Don't retry on auth errors or client errors (except 429)
+      if (resp.status === 401 || resp.status === 403 || (resp.status >= 400 && resp.status !== 429)) return resp;
+      if (resp.ok) return resp;
+      if (attempt < maxAttempts - 1) {
+        const delay = 1000 * Math.pow(2, attempt) + Math.random() * 500;
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      return resp;
+    } catch(e) {
+      if (e?.name === 'AbortError') throw e;
+      if (attempt < maxAttempts - 1) {
+        const delay = 1000 * Math.pow(2, attempt) + Math.random() * 500;
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
+function createStreamHandler(el, onDone) {
+  let buf = '', rafId = null;
+  function flush() { rafId = null; if (el) el.textContent = buf; }
+  return {
+    onChunk(chunk) { buf += chunk; if (!rafId) rafId = requestAnimationFrame(flush); },
+    getText() { return buf; },
+    cancel() { if (rafId) { cancelAnimationFrame(rafId); rafId = null; } }
+  };
+}
+
 async function streamAI(systemPrompt, messages, maxTokens, onChunk, signal){
   const ai = getActiveAI();
   if(!ai) throw new Error('No API key found. Tap the gear icon → add Claude or Gemini key.');
@@ -1062,12 +1119,12 @@ async function streamAI(systemPrompt, messages, maxTokens, onChunk, signal){
 
   try{
     if(ai === 'claude'){
-      const resp = await fetch('https://api.anthropic.com/v1/messages',{
+      const resp = await _fetchWithRetry(() => fetch('https://api.anthropic.com/v1/messages',{
         method:'POST',
         signal: ctrl.signal,
         headers:{'x-api-key':apiKey,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
         body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:maxTokens,stream:true,system:systemPrompt,messages})
-      });
+      }), ctrl.signal);
       if(!resp.ok){const e=await resp.json();throw new Error('Claude: '+(e.error?.message||resp.status));}
       const reader=resp.body.getReader(),dec=new TextDecoder();
       while(true){
@@ -1083,10 +1140,10 @@ async function streamAI(systemPrompt, messages, maxTokens, onChunk, signal){
       // Gemini
       const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?key=${geminiKey}&alt=sse`;
       const contents=messages.map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:m.content}]}));
-      const resp=await fetch(url,{
+      const resp=await _fetchWithRetry(() => fetch(url,{
         method:'POST',signal: ctrl.signal,headers:{'content-type':'application/json'},
         body:JSON.stringify({system_instruction:{parts:[{text:systemPrompt}]},contents,generationConfig:{maxOutputTokens:maxTokens}})
-      });
+      }), ctrl.signal);
       if(!resp.ok){const e=await resp.json();const msg=e.error?.message||resp.status;const hint=(resp.status===401||resp.status===403)?' — Get a free key at aistudio.google.com/app/apikey':'';throw new Error('Gemini: '+msg+hint);}
       const reader=resp.body.getReader(),dec=new TextDecoder();
       while(true){
@@ -1142,29 +1199,86 @@ const PROXIES = [
   u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
 ];
 
-async function tryFetch(url, timeout=7000){
-  for(const proxy of PROXIES){
-    try{
-      const ctrl = new AbortController();
-      const tid = setTimeout(() => ctrl.abort(), timeout);
-      let r;
-      try {
-        r = await fetch(proxy(url), {signal: ctrl.signal});
-        clearTimeout(tid);
-      } catch(e) {
-        clearTimeout(tid);
-        throw e;
-      }
-      if(!r.ok) continue;
-      const d = await r.json();
-      if(d && !d.error) return d;
-    } catch{}
+// Circuit breaker for CORS proxies
+const _proxyCB = PROXIES.map(() => ({ fails: 0, openUntil: 0 }));
+const CB_THRESHOLD = 3, CB_COOLDOWN_MS = 90000;
+function _onProxyFail(i) {
+  if (i < 0 || i >= _proxyCB.length) return;
+  _proxyCB[i].fails++;
+  if (_proxyCB[i].fails >= CB_THRESHOLD) {
+    _proxyCB[i].openUntil = Date.now() + CB_COOLDOWN_MS;
+    _proxyCB[i].fails = 0;
   }
-  return null;
+}
+function _onProxySuccess(i) {
+  if (i < 0 || i >= _proxyCB.length) return;
+  _proxyCB[i].fails = 0;
+  _proxyCB[i].openUntil = 0;
+}
+
+async function tryFetch(url, timeout=7000){
+  // Circuit breaker state (module-level, defined above this function)
+  const now = Date.now();
+  const live = PROXIES.filter((_, i) => {
+    const cb = _proxyCB[i];
+    if (cb.openUntil > now) return false;
+    return true;
+  });
+  if (!live.length) return null;
+
+  const controllers = live.map(() => new AbortController());
+  const attempts = live.map((proxy, i) => {
+    const tid = setTimeout(() => controllers[i].abort(), timeout);
+    const idx = PROXIES.indexOf(proxy);
+    return fetch(proxy(url), { signal: controllers[i].signal })
+      .then(r => {
+        clearTimeout(tid);
+        if (!r.ok) { _onProxyFail(idx); throw new Error(`HTTP ${r.status}`); }
+        return r.json();
+      })
+      .then(d => {
+        if (!d || d.error) { _onProxyFail(idx); throw new Error('Bad data'); }
+        _onProxySuccess(idx);
+        return d;
+      })
+      .catch(e => { clearTimeout(tid); _onProxyFail(idx); return Promise.reject(e); });
+  });
+
+  try {
+    const result = await Promise.any(attempts);
+    controllers.forEach(c => c.abort());
+    return result;
+  } catch {
+    controllers.forEach(c => c.abort());
+    return null;
+  }
 }
 
 // ── 1-Year Price Chart ──────────────────────────────────
+const _chartCache = {}; // ticker → { html: string, ts: number }
+const CHART_TTL_MS = 15 * 60 * 1000;
+
 async function showChart(ticker) {
+  const cached = _chartCache[ticker];
+  if (cached && Date.now() - cached.ts < CHART_TTL_MS) {
+    document.getElementById('chart-body').innerHTML = cached.html;
+    // Still open the modal
+    openModal('chart-modal');
+    document.getElementById('chart-title').textContent = ticker;
+    document.getElementById('chart-subtitle').textContent = quotes[ticker]?.name?.split(' ').slice(0,5).join(' ') || '';
+    // Wire up action buttons with this ticker captured in closure
+    document.getElementById('chart-ask-btn').onclick = () => {
+      closeModal('chart-modal');
+      quickAsk(`Give me a full analysis of ${ticker} with a buy/hold/avoid verdict and entry price target`);
+    };
+    const watchBtn = document.getElementById('chart-watch-btn');
+    const updateWatchBtn = () => {
+      watchBtn.textContent = watchlist.includes(ticker) ? '★ Watchlisted' : '☆ Watchlist';
+    };
+    watchBtn.onclick = () => { toggleWatchlist(ticker); updateWatchBtn(); };
+    updateWatchBtn();
+    return;
+  }
   openModal('chart-modal');
   document.getElementById('chart-title').textContent = ticker;
   document.getElementById('chart-subtitle').textContent = quotes[ticker]?.name?.split(' ').slice(0,5).join(' ') || '';
@@ -1235,7 +1349,7 @@ async function showChart(ticker) {
       <text x="${(PL + cW).toFixed(1)}" y="${H - 1}" text-anchor="end" font-size="9" fill="#94a3b8">${fmtDate(pts[pts.length - 1].t)}</text>
     </svg>`;
 
-    body.innerHTML = `
+    const chartHtml = `
       <div class="flex items-baseline gap-3 mb-3">
         <span class="text-2xl font-bold text-gray-900">${fmt(last)}</span>
         <span class="text-sm font-bold ${last >= first ? 'gain' : 'loss'}">${chg >= 0 ? '+' : ''}${chg.toFixed(1)}% (1Y)</span>
@@ -1245,6 +1359,8 @@ async function showChart(ticker) {
         <span>52W Low: ${fmtP(minP)}</span>
         <span>52W High: ${fmtP(maxP)}</span>
       </div>`;
+    body.innerHTML = chartHtml;
+    _chartCache[ticker] = { html: chartHtml, ts: Date.now() };
   } catch (e) {
     body.innerHTML = `<p class="text-gray-400 text-sm text-center py-8">Chart unavailable — ${esc(e.message)}</p>`;
   }
@@ -1625,14 +1741,16 @@ Write a sharp, data-driven 3-sentence market briefing for a beginner investor. U
 
 Tone: direct, confident, plain English. No jargon. No time greetings. Start immediately with the market insight.`;
 
-    let text = '';
+    const briefHandler = createStreamHandler(briefEl);
     await streamAI(
       'You are a senior market strategist. Use the exact data provided — indexes, sectors, specific tickers. Be sharp and specific, not generic. Never open with "Good morning" or similar.',
       [{role:'user',content:prompt}],
       450,
-      chunk=>{ text+=chunk; briefEl.textContent=text; }
+      chunk=>{ briefHandler.onChunk(chunk); }
     );
-  } catch(e){ briefEl.innerHTML = '<p class="text-red-300 text-sm">AI brief unavailable. Check your API key in Settings.</p>'; }
+    briefHandler.cancel();
+    briefEl.textContent = briefHandler.getText();
+  } catch(e){ briefEl.innerHTML = `<p class="text-red-300 text-sm">${esc(getErrorMsg('ai', e?.message))}</p>`; }
   finally { _briefAnalyzing = false; }
 }
 
@@ -1744,8 +1862,10 @@ Build my complete plan with exact allocations, entry prices, profit targets, sto
 
   try{
     const streamEl = document.getElementById('invest-stream');
-    let text='';
-    await streamAI(systemPrompt,[{role:'user',content:userMsg}],2000,chunk=>{text+=chunk;streamEl.textContent=text;});
+    const investHandler = createStreamHandler(streamEl);
+    await streamAI(systemPrompt,[{role:'user',content:userMsg}],2000,chunk=>{ investHandler.onChunk(chunk); });
+    investHandler.cancel();
+    streamEl.textContent = investHandler.getText();
     streamEl.classList.remove('streaming');
   }catch(err){
     el.innerHTML=`<div class="card p-4"><p class="text-red-500 font-semibold mb-2">AI Error: ${esc(err.message)}</p><p class="text-xs text-gray-400">Showing rule-based plan instead.</p></div>`;
@@ -1804,6 +1924,19 @@ function renderRuleBasedPlan(budget, risk, horizon, validQuotes){
 // ══════════════════════════════════════════════════════
 // ANALYST CHAT
 // ══════════════════════════════════════════════════════
+function pruneHistory(history, maxMessages=20, maxChars=12000) {
+  let total = 0;
+  const result = [];
+  for (let i = history.length - 1; i >= 0; i--) {
+    const len = (history[i].content || '').length;
+    total += len;
+    if (total > maxChars) break;
+    result.unshift(history[i]);
+  }
+  // Also cap at maxMessages
+  return result.slice(-maxMessages);
+}
+
 const STOP_WORDS = new Set(['A','I','IS','IT','IN','AT','BE','AS','OR','AND','THE','FOR','TO','OF','AN','ON','DO','IF','BY','US','WE','MY','AM','ARE','WAS','CAN','MAY','NOT','BUT','ALL','SO','UP','NO','GO','HOW','WHY','WHO','NOW','BUY','SELL','HOLD','GOOD','BAD','HIGH','LOW','ETF','IPO','CEO','EPS','FCF','ROE','ROA','PUT','CALL','GET','HAS','HAD','HIM','HER','ITS','NEW','OLD','BIG','TOO','DID','DAY','USE','FAR','OWN','RUN','SET','SAY','SEE','ADD','CUT','FIT','LET']);
 
 function extractTickers(text){
@@ -1847,7 +1980,7 @@ async function handleChat(){
 
   // Add to chat history
   chatHistory.push({role:'user',content:msg});
-  if(chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+  chatHistory = pruneHistory(chatHistory);
 
   const loadEl = appendMsg('ai', '', true);
   loadEl.innerHTML = '<span class="spin"></span> <span class="text-gray-400 text-sm">Fetching market data…</span>';
@@ -1941,7 +2074,7 @@ STYLE RULES:
 - End every response with "⚡ Bottom Line:" on its own line
 - Note: educational analysis only, not official financial advice`;
 
-  const messages = [...chatHistory.slice(-10)];
+  const messages = [...pruneHistory(chatHistory)];
   if(contextData || newsContext){
     let lastUserIdx = -1;
     for(let i = messages.length - 1; i >= 0; i--) {
@@ -1953,8 +2086,11 @@ STYLE RULES:
   try{
     loadEl.className = 'chat-msg-ai streaming';
     loadEl.textContent = '';
-    let text='';
-    await streamAI(systemPrompt, messages, 2000, chunk=>{ text+=chunk; loadEl.textContent=text; scrollChat(); });
+    const chatMsgHandler = createStreamHandler(loadEl);
+    await streamAI(systemPrompt, messages, 2000, chunk=>{ chatMsgHandler.onChunk(chunk); scrollChat(); });
+    chatMsgHandler.cancel();
+    loadEl.textContent = chatMsgHandler.getText();
+    const text = chatMsgHandler.getText();
     loadEl.classList.remove('streaming');
     // UX-10: Apply basic markdown rendering after streaming completes
     loadEl.innerHTML = renderMarkdown(loadEl.textContent);
@@ -2368,7 +2504,10 @@ function renderPortfolio(){
   if(missing.length && !_portfolioRefreshing){
     _portfolioRefreshing = true;
     // BUG-020: Reset _portfolioRefreshing AFTER the recursive renderPortfolio() call
-    Promise.all(missing.map(([t])=>fetchQuote(t).then(q=>{if(q)cacheQuote(t,q);}))).then(()=>{ renderPortfolio(); _portfolioRefreshing=false; }).catch(()=>{ _portfolioRefreshing=false; });
+    Promise.all(missing.map(([t])=>fetchQuote(t).then(q=>{if(q)cacheQuote(t,q);})))
+      .then(() => { renderPortfolio(); })
+      .catch(()=>{})
+      .finally(() => { _portfolioRefreshing = false; });
   }
 }
 
@@ -2495,7 +2634,7 @@ async function analyzePortfolio(){
     await Promise.all(entries.map(([t]) => fetchQuote(t).then(q => { if(q) cacheQuote(t,q); })));
     el.innerHTML = '<div class="flex items-center gap-2 text-sm text-gray-400"><span class="spin"></span> Fetching fundamentals &amp; scoring positions…</div>';
     const fundsArr = await Promise.all(entries.map(([t]) => fetchFundamentals(t)));
-    entries.forEach(([t], i) => { if(fundsArr[i]) fundamentalsCache[t] = fundsArr[i]; });
+    entries.forEach(([t], i) => { if(fundsArr[i]) cacheFundamentals(t, fundsArr[i]); });
   } catch(fetchErr) {
     el.innerHTML = `<div class="text-red-500 text-sm">Failed to fetch portfolio data: ${esc(fetchErr.message)}</div>`;
     _portfolioAnalyzing = false;
@@ -2611,8 +2750,10 @@ Be specific with each position. Cite the key metric driving each recommendation.
 
   try{
     const se = document.getElementById('p-stream');
-    let text = '';
-    await streamAI(sysPrompt, [{role:'user',content:userMsg}], 1600, chunk => { text += chunk; se.textContent = text; });
+    const portfolioHandler = createStreamHandler(se);
+    await streamAI(sysPrompt, [{role:'user',content:userMsg}], 1600, chunk => { portfolioHandler.onChunk(chunk); });
+    portfolioHandler.cancel();
+    se.textContent = portfolioHandler.getText();
     se.classList.remove('streaming');
     renderPortfolio(); // refresh holding cards to show score badges
   } catch(err){ document.getElementById('p-stream').innerHTML = `<div class="text-red-500 text-sm">${esc(err.message)}</div>`; }
@@ -2683,8 +2824,10 @@ Be specific with real ticker symbols and price levels. Assume I use Robinhood or
   try{
     el.innerHTML = '<div class="card p-4"><div id="earn-stream" class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap streaming"></div></div>';
     const se = document.getElementById('earn-stream');
-    let text = '';
-    await streamAI(sys, [{role:'user',content:userMsg}], 1500, chunk=>{ text+=chunk; se.textContent=text; });
+    const incomeHandler = createStreamHandler(se);
+    await streamAI(sys, [{role:'user',content:userMsg}], 1500, chunk=>{ incomeHandler.onChunk(chunk); });
+    incomeHandler.cancel();
+    se.textContent = incomeHandler.getText();
     se.classList.remove('streaming');
   } catch(err){
     // Restore tips on error so the tab isn't left empty (B2-5)
@@ -2720,12 +2863,22 @@ setInterval(_updateLastUpdated, 30000);
 
 // Auto-refresh active tab every 5 minutes when stale
 setInterval(()=>{
+  if (document.visibilityState !== 'visible') return;
   const active = document.querySelector('.tab-pane.active');
   if(!active) return;
   // UX-12: Pass autoRefresh=true to skip AI brief quota consumption on background refresh
   if(active.id==='tab-brief' && Date.now()-_briefLastFetch > STALE_MS) loadBrief(false, true);
   else if(active.id==='tab-portfolio' && Date.now()-_portfolioLastFetch > STALE_MS && Object.keys(portfolio).length) refreshPortfolio();
 }, 60000); // check every minute
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  const active = document.querySelector('.tab-pane.active');
+  if (!active) return;
+  const now = Date.now();
+  if (active.id === 'tab-brief' && now - _briefLastFetch > STALE_MS) loadBrief(false, true);
+  else if (active.id === 'tab-portfolio' && now - _portfolioLastFetch > STALE_MS && Object.keys(portfolio).length) refreshPortfolio();
+});
 
 // ══════════════════════════════════════════════════════
 // DARK MODE (Feature 1)

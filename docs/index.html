@@ -309,6 +309,8 @@
       <div id="ai-brief" class="text-sm leading-relaxed opacity-95"></div>
     </div>
 
+    <div id="mood-ring-card" style="display:none" class="insight-card insight-info text-sm mb-2"></div>
+
     <div class="card p-4">
       <div class="section-label">Market Pulse</div>
       <div id="market-pulse" class="space-y-1 text-sm text-gray-500">
@@ -429,6 +431,9 @@
           <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14M12 5l7 7-7 7"/></svg>
         </button>
       </div>
+      <div class="flex justify-end mt-1">
+        <button onclick="clearChatHistory()" class="text-xs text-gray-400 hover:text-red-400 cursor-pointer" style="background:none;border:none;padding:2px 4px">🗑 Clear Chat</button>
+      </div>
     </div>
   </div>
 
@@ -507,8 +512,12 @@
     <div class="card p-4">
       <div class="flex items-center justify-between mb-3">
         <div class="section-label" style="margin-bottom:0">Watchlist</div>
-        <button onclick="refreshWatchlist()" style="font-size:12px;color:#3b82f6;font-weight:600;display:flex;align-items:center;gap:4px;background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:8px">&#8635; Refresh All</button>
+        <div class="flex items-center gap-1">
+          <button onclick="refreshWatchlist()" style="font-size:12px;color:#3b82f6;font-weight:600;display:flex;align-items:center;gap:4px;background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:8px">&#8635; Refresh All</button>
+          <button onclick="handleWatchlistDigest()" id="wl-digest-btn" class="btn btn-sm btn-outline ml-2" style="font-size:12px">🤖 Digest</button>
+        </div>
       </div>
+      <div id="wl-digest-result" style="display:none" class="insight-card insight-info mx-4 mb-2 text-sm"></div>
       <div id="watch-list"></div>
       <div id="watch-empty" class="py-8 text-center" style="display:none">
         <div class="text-4xl mb-2">⭐</div>
@@ -783,6 +792,7 @@
     </div>
     <div class="text-xs text-gray-400 mb-3">1-Year Weekly Price Chart</div>
     <div id="chart-body" style="min-height:100px"></div>
+    <div id="chart-sentiment" style="display:none;font-size:12px;padding:6px 8px;margin-top:4px;background:var(--card);border-radius:6px"></div>
     <div class="flex gap-2 mt-4">
       <button id="chart-ask-btn" class="btn btn-primary" style="flex:1">AI Analysis →</button>
       <button id="chart-watch-btn" class="btn btn-outline btn-sm" style="min-width:110px;flex-shrink:0">☆ Watchlist</button>
@@ -868,7 +878,9 @@ function cacheQuote(ticker, data){
     evict.forEach(t=>{ delete quotes[t]; });
   }
 }
-let chatHistory = [];
+let chatHistory = (()=>{
+  try { return JSON.parse(localStorage.getItem('msa_chat_history') || '[]').slice(-20); } catch{ return []; }
+})();
 let watchlist = safeJsonParse('msa_watchlist', []);
 let alerts   = safeJsonParse('msa_alerts',    {});
 let _darkMode = localStorage.getItem('msa_dark') === '1';
@@ -1282,6 +1294,8 @@ async function showChart(ticker) {
   openModal('chart-modal');
   document.getElementById('chart-title').textContent = ticker;
   document.getElementById('chart-subtitle').textContent = quotes[ticker]?.name?.split(' ').slice(0,5).join(' ') || '';
+  const sentBoxReset = document.getElementById('chart-sentiment');
+  if (sentBoxReset) { sentBoxReset.style.display = 'none'; sentBoxReset.innerHTML = ''; }
   const body = document.getElementById('chart-body');
   body.innerHTML = '<div class="flex justify-center items-center py-10"><span class="spin"></span></div>';
 
@@ -1361,6 +1375,21 @@ async function showChart(ticker) {
       </div>`;
     body.innerHTML = chartHtml;
     _chartCache[ticker] = { html: chartHtml, ts: Date.now() };
+
+    // After chart SVG is set, fetch and display news sentiment
+    if (getActiveAI()) {
+      const sentBox = document.getElementById('chart-sentiment');
+      if (sentBox) {
+        fetchNews(ticker).then(async news => {
+          const s = await getNewsSentiment(ticker, news);
+          if (s) {
+            const color = s.sentiment === 'Positive' ? '#16a34a' : s.sentiment === 'Negative' ? '#dc2626' : '#d97706';
+            sentBox.innerHTML = `<span style="color:${color};font-weight:600">● ${s.sentiment}</span> — ${esc(s.signal)}`;
+            sentBox.style.display = 'block';
+          }
+        }).catch(()=>{});
+      }
+    }
   } catch (e) {
     body.innerHTML = `<p class="text-gray-400 text-sm text-center py-8">Chart unavailable — ${esc(e.message)}</p>`;
   }
@@ -1426,6 +1455,25 @@ async function fetchNews(ticker){
   const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${ticker}&newsCount=4&enableFuzzyQuery=false`;
   const d = await tryFetch(url, 6000);
   return d?.news||[];
+}
+
+async function getNewsSentiment(ticker, newsArr) {
+  if (!newsArr?.length) return null;
+  const titles = newsArr.slice(0,4).map(n => n.title).filter(Boolean).join('; ');
+  if (!titles) return null;
+  const prompt = `News for ${ticker}: "${titles}". Respond with exactly this format: SENTIMENT: [Positive/Mixed/Negative] | SIGNAL: [one short sentence about price impact]`;
+  let out = '';
+  try {
+    await streamAI(
+      'You are a news sentiment analyst. Be brief and structured.',
+      [{ role: 'user', content: prompt }],
+      80,
+      chunk => { out += chunk; }
+    );
+    const match = out.match(/SENTIMENT:\s*(Positive|Mixed|Negative)\s*\|\s*SIGNAL:\s*(.+)/i);
+    if (match) return { sentiment: match[1], signal: match[2].trim() };
+  } catch {}
+  return null;
 }
 
 async function fetchTrending(){
@@ -1694,6 +1742,23 @@ async function loadAIBrief(idxQuotes, rankedPicks, trending){
       .map(([s, pcts]) => `${s} avg ${(pcts.reduce((a,b)=>a+b,0)/pcts.length).toFixed(1)}%`)
       .join(', ');
 
+    // Derive top and bottom sectors for mood ring
+    const sectorAvgs = Object.entries(sectorPerf).map(([s, pcts]) => ({ s, avg: pcts.reduce((a,b)=>a+b,0)/pcts.length }));
+    sectorAvgs.sort((a,b) => b.avg - a.avg);
+    const topSector = sectorAvgs[0]?.s || null;
+    const bottomSector = sectorAvgs[sectorAvgs.length - 1]?.s || null;
+
+    // Fire market mood ring (non-blocking)
+    if (getActiveAI()) {
+      getMarketMood(idxQuotes, topSector, bottomSector).then(mood => {
+        const el = document.getElementById('mood-ring-card');
+        if (!el || !mood) return;
+        const moodColor = mood.mood.includes('Bull') ? '#16a34a' : mood.mood.includes('Bear') ? '#dc2626' : '#d97706';
+        el.innerHTML = `<span style="color:${moodColor};font-weight:700">● ${esc(mood.mood)}</span> <span style="color:var(--muted)">${mood.confidence}% confidence</span> — ${esc(mood.reason)}`;
+        el.style.display = 'block';
+      }).catch(()=>{});
+    }
+
     // ── Top gainers / losers from the picks ───────────
     const sorted = [...rankedPicks].sort((a,b) => b.q.changePct - a.q.changePct);
     const gainers = sorted.slice(0,3).map(x=>`${x.t} ${fmtN(x.q.changePct)}`).join(', ');
@@ -1757,6 +1822,23 @@ Tone: direct, confident, plain English. No jargon. No time greetings. Start imme
 async function refreshBrief(){
   await loadBrief();
   toast('Brief refreshed');
+}
+
+async function getMarketMood(idxQuotes, sectorLeader, sectorLagger) {
+  const lines = idxQuotes.filter(Boolean).map(q => `${q.ticker} ${q.changePct >= 0 ? '+' : ''}${q.changePct?.toFixed(1)}%`).join(', ');
+  const prompt = `Market snapshot: ${lines}. Leading sector: ${sectorLeader||'N/A'}. Lagging: ${sectorLagger||'N/A'}. Respond in exactly this format: MOOD: [Strong Bull/Bull/Neutral/Bear/Strong Bear] | CONFIDENCE: [0-100]% | REASON: [one short sentence]`;
+  let out = '';
+  try {
+    await streamAI(
+      'You are a market technician. Be concise and structured.',
+      [{role:'user', content: prompt}],
+      80,
+      chunk => { out += chunk; }
+    );
+    const m = out.match(/MOOD:\s*([^|]+)\s*\|\s*CONFIDENCE:\s*(\d+)%\s*\|\s*REASON:\s*(.+)/i);
+    if (m) return { mood: m[1].trim(), confidence: parseInt(m[2]), reason: m[3].trim() };
+  } catch {}
+  return null;
 }
 
 // ══════════════════════════════════════════════════════
@@ -1981,6 +2063,7 @@ async function handleChat(){
   // Add to chat history
   chatHistory.push({role:'user',content:msg});
   chatHistory = pruneHistory(chatHistory);
+  try { localStorage.setItem('msa_chat_history', JSON.stringify(chatHistory.slice(-20))); } catch{}
 
   const loadEl = appendMsg('ai', '', true);
   loadEl.innerHTML = '<span class="spin"></span> <span class="text-gray-400 text-sm">Fetching market data…</span>';
@@ -2095,6 +2178,7 @@ STYLE RULES:
     // UX-10: Apply basic markdown rendering after streaming completes
     loadEl.innerHTML = renderMarkdown(loadEl.textContent);
     chatHistory.push({role:'assistant',content:text});
+    try { localStorage.setItem('msa_chat_history', JSON.stringify(chatHistory.slice(-20))); } catch{}
     addCopyBtn(loadEl);
     // Add watchlist star buttons for mentioned tickers
     if(tickers.length){
@@ -2162,6 +2246,29 @@ function addCopyBtn(msgEl){
   msgEl.parentNode.insertBefore(btn, msgEl.nextSibling);
 }
 function scrollChat(){ const el=document.getElementById('chat-messages'); if(el) el.scrollTop=el.scrollHeight; }
+
+function renderChatWelcome() {
+  const chatEl = document.getElementById('chat-messages');
+  if (!chatEl) return;
+  chatEl.innerHTML = `<div class="chat-msg-ai">
+    Hi! I'm your personal stock analyst. I use real market data and AI to help you make smarter investment decisions.<br><br>
+    Ask me to analyze any stock, compare options, or get investment ideas. I'll explain everything in simple terms — no finance jargon!<br><br>
+    <em class="text-gray-500 text-xs">Type below or tap a quick button above.</em>
+    <div class="flex flex-wrap gap-2 mt-3">
+      <button class="pill pill-bl" onclick="quickAsk('Is AAPL a buy right now?')">Is AAPL a buy?</button>
+      <button class="pill pill-bl" onclick="quickAsk('Analyze NVDA — is it overvalued?')">Analyze NVDA</button>
+      <button class="pill pill-bl" onclick="quickAsk('What is a P/E ratio and why does it matter?')">What is P/E ratio?</button>
+    </div>
+  </div>`;
+}
+
+function clearChatHistory() {
+  chatHistory = [];
+  try { localStorage.removeItem('msa_chat_history'); } catch {}
+  document.getElementById('chat-messages').innerHTML = '';
+  // Re-render the welcome message / suggestion chips
+  renderChatWelcome();
+}
 
 // UX-10: Basic markdown rendering applied after streaming completes
 function renderMarkdown(text){
@@ -3060,6 +3167,46 @@ async function refreshWatchlist(){
   checkAllAlerts();
   renderWatchlist();
   toast('Watchlist updated!');
+}
+
+async function handleWatchlistDigest() {
+  if (!watchlist.length) { toast('Add stocks to your watchlist first'); return; }
+  const btn = document.getElementById('wl-digest-btn');
+  const result = document.getElementById('wl-digest-result');
+  if (!btn || !result) return;
+  btn.disabled = true; btn.textContent = '⏳ Thinking…';
+  result.style.display = 'block';
+  result.textContent = '';
+
+  // Build context from cached quotes
+  const items = watchlist.slice(0,15).map(t => {
+    const q = quotes[t];
+    if (!q) return `${t}: price unknown`;
+    const chg = q.changePct >= 0 ? `+${q.changePct.toFixed(1)}%` : `${q.changePct.toFixed(1)}%`;
+    return `${t} $${q.price?.toFixed(2)} (${chg})`;
+  }).join(', ');
+
+  // Get index context
+  const spyQ = quotes['SPY'];
+  const mktCtx = spyQ ? `Market: SPY ${spyQ.changePct >= 0 ? '+' : ''}${spyQ.changePct?.toFixed(1)}%.` : '';
+
+  const prompt = `My watchlist: ${items}. ${mktCtx} Write a 3-4 sentence watchlist digest. Name the strongest and weakest performer, flag any unusual move, and give one specific actionable idea. Be concise and data-driven.`;
+
+  let text = '';
+  const ctrl = new AbortController();
+  try {
+    await streamAI(
+      'You are a concise portfolio monitor. Use exact tickers and % moves. Under 4 sentences.',
+      [{ role: 'user', content: prompt }],
+      200,
+      chunk => { text += chunk; result.textContent = text; },
+      ctrl.signal
+    );
+  } catch(e) {
+    if (e?.name !== 'AbortError') result.textContent = getErrorMsg('ai', e?.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '🤖 Digest';
+  }
 }
 
 // ══════════════════════════════════════════════════════

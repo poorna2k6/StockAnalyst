@@ -792,7 +792,7 @@
     </div>
     <div class="text-xs text-gray-400 mb-3">1-Year Weekly Price Chart</div>
     <div id="chart-body" style="min-height:100px"></div>
-    <div id="chart-sentiment" style="display:none;font-size:12px;padding:6px 8px;margin-top:4px;background:var(--card);border-radius:6px"></div>
+    <div id="chart-sentiment" style="display:none;font-size:12px;padding:6px 8px;margin-top:4px;background:rgba(30,41,59,0.85);border:1px solid rgba(255,255,255,0.08);border-radius:12px"></div>
     <div class="flex gap-2 mt-4">
       <button id="chart-ask-btn" class="btn btn-primary" style="flex:1">AI Analysis →</button>
       <button id="chart-watch-btn" class="btn btn-outline btn-sm" style="min-width:110px;flex-shrink:0">☆ Watchlist</button>
@@ -896,7 +896,7 @@ function getErrorMsg(context, err) {
   const isOffline = !navigator.onLine;
   if (isOffline) return 'You\'re offline — showing last known data.';
   if (context === 'quote') return 'Market data is slow right now. Try refreshing in 30 seconds.';
-  if (context === 'ai') return 'AI is taking a moment — tap Retry or try again shortly.';
+  if (context === 'ai') return 'AI is taking a moment — try again shortly.';
   if (context === 'ticker-not-found') return `"${err}" wasn't found. Check the symbol (e.g. Berkshire = BRK-B).`;
   return 'Data temporarily unavailable. Try refreshing.';
 }
@@ -1088,8 +1088,8 @@ async function _fetchWithRetry(fetchFn, signal, maxAttempts=3) {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     try {
       const resp = await fetchFn();
-      // Don't retry on auth errors or client errors (except 429)
-      if (resp.status === 401 || resp.status === 403 || (resp.status >= 400 && resp.status !== 429)) return resp;
+      // Don't retry on auth errors or 4xx client errors (except 429 rate-limit); DO retry on 5xx
+      if (resp.status === 401 || resp.status === 403 || (resp.status >= 400 && resp.status < 500 && resp.status !== 429)) return resp;
       if (resp.ok) return resp;
       if (attempt < maxAttempts - 1) {
         const delay = 1000 * Math.pow(2, attempt) + Math.random() * 500;
@@ -1242,18 +1242,19 @@ async function tryFetch(url, timeout=7000){
   const attempts = live.map((proxy, i) => {
     const tid = setTimeout(() => controllers[i].abort(), timeout);
     const idx = PROXIES.indexOf(proxy);
+    let failRecorded = false;
     return fetch(proxy(url), { signal: controllers[i].signal })
       .then(r => {
         clearTimeout(tid);
-        if (!r.ok) { _onProxyFail(idx); throw new Error(`HTTP ${r.status}`); }
+        if (!r.ok) { _onProxyFail(idx); failRecorded = true; throw new Error(`HTTP ${r.status}`); }
         return r.json();
       })
       .then(d => {
-        if (!d || d.error) { _onProxyFail(idx); throw new Error('Bad data'); }
+        if (!d || d.error) { _onProxyFail(idx); failRecorded = true; throw new Error('Bad data'); }
         _onProxySuccess(idx);
         return d;
       })
-      .catch(e => { clearTimeout(tid); _onProxyFail(idx); return Promise.reject(e); });
+      .catch(e => { clearTimeout(tid); if (!failRecorded) _onProxyFail(idx); return Promise.reject(e); });
   });
 
   try {
@@ -1268,12 +1269,17 @@ async function tryFetch(url, timeout=7000){
 
 // ── 1-Year Price Chart ──────────────────────────────────
 const _chartCache = {}; // ticker → { html: string, ts: number }
+const _chartOrder = []; // insertion-order for LRU eviction
 const CHART_TTL_MS = 15 * 60 * 1000;
+const MAX_CHART_CACHE = 50;
 
 async function showChart(ticker) {
   const cached = _chartCache[ticker];
   if (cached && Date.now() - cached.ts < CHART_TTL_MS) {
     document.getElementById('chart-body').innerHTML = cached.html;
+    // Reset and re-fetch sentiment on each open (even cached chart)
+    const sentBoxC = document.getElementById('chart-sentiment');
+    if (sentBoxC) { sentBoxC.style.display = 'none'; sentBoxC.innerHTML = ''; }
     // Still open the modal
     openModal('chart-modal');
     document.getElementById('chart-title').textContent = ticker;
@@ -1289,6 +1295,22 @@ async function showChart(ticker) {
     };
     watchBtn.onclick = () => { toggleWatchlist(ticker); updateWatchBtn(); };
     updateWatchBtn();
+    // Re-fetch sentiment for cached chart too
+    if (getActiveAI()) {
+      const sentBox = document.getElementById('chart-sentiment');
+      if (sentBox) {
+        sentBox.innerHTML = '<span style="color:#94a3b8;font-size:11px">Analyzing sentiment…</span>';
+        sentBox.style.display = 'block';
+        fetchNews(ticker).then(async news => {
+          if (sentBox.style.display === 'none') return;
+          const s = await getNewsSentiment(ticker, news);
+          if (s && sentBox.style.display !== 'none') {
+            const color = s.sentiment === 'Positive' ? '#22c55e' : s.sentiment === 'Negative' ? '#f87171' : '#fbbf24';
+            sentBox.innerHTML = `<span style="color:${color};font-weight:600">● ${s.sentiment}</span> — <span style="color:#cbd5e1">${esc(s.signal)}</span>`;
+          } else if (!s) { sentBox.style.display = 'none'; }
+        }).catch(() => { sentBox.style.display = 'none'; });
+      }
+    }
     return;
   }
   openModal('chart-modal');
@@ -1374,20 +1396,30 @@ async function showChart(ticker) {
         <span>52W High: ${fmtP(maxP)}</span>
       </div>`;
     body.innerHTML = chartHtml;
+    // Cache with LRU eviction
+    const existingIdx = _chartOrder.indexOf(ticker);
+    if (existingIdx !== -1) _chartOrder.splice(existingIdx, 1);
+    _chartOrder.push(ticker);
     _chartCache[ticker] = { html: chartHtml, ts: Date.now() };
+    while (_chartOrder.length > MAX_CHART_CACHE) { delete _chartCache[_chartOrder.shift()]; }
 
-    // After chart SVG is set, fetch and display news sentiment
+    // After chart SVG is set, fetch and display news sentiment (non-blocking)
     if (getActiveAI()) {
       const sentBox = document.getElementById('chart-sentiment');
       if (sentBox) {
+        sentBox.innerHTML = '<span style="color:#94a3b8;font-size:11px">Analyzing sentiment…</span>';
+        sentBox.style.display = 'block';
         fetchNews(ticker).then(async news => {
+          // Guard: if modal was closed/chart changed, sentBox may be reset — skip stale write
+          if (sentBox.style.display === 'none') return;
           const s = await getNewsSentiment(ticker, news);
-          if (s) {
-            const color = s.sentiment === 'Positive' ? '#16a34a' : s.sentiment === 'Negative' ? '#dc2626' : '#d97706';
-            sentBox.innerHTML = `<span style="color:${color};font-weight:600">● ${s.sentiment}</span> — ${esc(s.signal)}`;
-            sentBox.style.display = 'block';
+          if (s && sentBox.style.display !== 'none') {
+            const color = s.sentiment === 'Positive' ? '#22c55e' : s.sentiment === 'Negative' ? '#f87171' : '#fbbf24';
+            sentBox.innerHTML = `<span style="color:${color};font-weight:600">● ${s.sentiment}</span> — <span style="color:#cbd5e1">${esc(s.signal)}</span>`;
+          } else if (!s) {
+            sentBox.style.display = 'none';
           }
-        }).catch(()=>{});
+        }).catch(() => { sentBox.style.display = 'none'; });
       }
     }
   } catch (e) {
@@ -1557,6 +1589,7 @@ async function loadBrief(force=false, autoRefresh=false){
   // Surface a visible error if all index fetches failed (proxy / network outage)
   const anyIndexLoaded = idxQuotes.some(Boolean);
   if(!anyIndexLoaded){
+    _briefLoading = false;
     document.getElementById('header-status').textContent = 'Data unavailable';
     const idxEl2 = document.getElementById('indexes-list');
     idxEl2.innerHTML = `<div class="text-sm text-red-500 py-2">Market data unavailable — tap <strong>Refresh</strong> to retry.</div>`;
@@ -1752,11 +1785,15 @@ async function loadAIBrief(idxQuotes, rankedPicks, trending){
     if (getActiveAI()) {
       getMarketMood(idxQuotes, topSector, bottomSector).then(mood => {
         const el = document.getElementById('mood-ring-card');
-        if (!el || !mood) return;
-        const moodColor = mood.mood.includes('Bull') ? '#16a34a' : mood.mood.includes('Bear') ? '#dc2626' : '#d97706';
-        el.innerHTML = `<span style="color:${moodColor};font-weight:700">● ${esc(mood.mood)}</span> <span style="color:var(--muted)">${mood.confidence}% confidence</span> — ${esc(mood.reason)}`;
+        if (!el) return;
+        if (!mood) { el.style.display = 'none'; return; }
+        const moodColor = mood.mood.includes('Bull') ? '#22c55e' : mood.mood.includes('Bear') ? '#f87171' : '#fbbf24';
+        el.innerHTML = `<span style="color:${moodColor};font-weight:700" aria-label="Market mood: ${esc(mood.mood)}">● ${esc(mood.mood)}</span> <span style="color:var(--muted)">${mood.confidence}% certainty</span> — ${esc(mood.reason)}`;
         el.style.display = 'block';
-      }).catch(()=>{});
+      }).catch(() => {
+        const el = document.getElementById('mood-ring-card');
+        if (el) el.style.display = 'none';
+      });
     }
 
     // ── Top gainers / losers from the picks ───────────
@@ -2011,8 +2048,9 @@ function pruneHistory(history, maxMessages=20, maxChars=12000) {
   const result = [];
   for (let i = history.length - 1; i >= 0; i--) {
     const len = (history[i].content || '').length;
+    // Always include at least the most recent message even if it alone exceeds budget
+    if (total + len > maxChars && result.length > 0) break;
     total += len;
-    if (total > maxChars) break;
     result.unshift(history[i]);
   }
   // Also cap at maxMessages
@@ -2214,11 +2252,11 @@ STYLE RULES:
       return;
     } else {
       loadEl.className='chat-msg-ai';
-      loadEl.textContent=`Error: ${err.message}. Please check your API key in Settings.`;
+      loadEl.textContent = getErrorMsg('ai', err?.message);
     }
   } finally {
-    // Clear any lingering spinner if the element is still in loading state
-    if(loadEl && loadEl.querySelector && loadEl.querySelector('.spin')) loadEl.innerHTML = '';
+    // Clear lingering spinner only if element is still in streaming/loading state (not if content rendered)
+    if(loadEl && loadEl.classList.contains('streaming') && loadEl.querySelector('.spin')) loadEl.innerHTML = '';
     _chatBusy = false; input.disabled = false; sendBtn.disabled = false; sendBtn.style.opacity = '1';
   }
   scrollChat();
@@ -2263,11 +2301,12 @@ function renderChatWelcome() {
 }
 
 function clearChatHistory() {
+  if (!confirm('Clear all chat history? This cannot be undone.')) return;
   chatHistory = [];
   try { localStorage.removeItem('msa_chat_history'); } catch {}
   document.getElementById('chat-messages').innerHTML = '';
-  // Re-render the welcome message / suggestion chips
   renderChatWelcome();
+  toast('Chat cleared');
 }
 
 // UX-10: Basic markdown rendering applied after streaming completes
@@ -2276,7 +2315,7 @@ function renderMarkdown(text){
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/^[-•] (.+)/gm, '<li>$1</li>')
-    .replace(/(<li>.*<\/li>)/s, '<ul class="list-disc pl-4 space-y-1">$1</ul>')
+    .replace(/((?:<li>[^<]*<\/li>\n?)+)/g, '<ul class="list-disc pl-4 space-y-1">$1</ul>')
     .replace(/─{3,}|━{3,}|—{3,}/g, '<hr class="border-gray-200 my-2">');
 }
 
@@ -2978,13 +3017,16 @@ setInterval(()=>{
   else if(active.id==='tab-portfolio' && Date.now()-_portfolioLastFetch > STALE_MS && Object.keys(portfolio).length) refreshPortfolio();
 }, 60000); // check every minute
 
+let _lastVisibilityRefresh = 0;
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
+  const now = Date.now();
+  // Dead-band: ignore if we refreshed within the last 5 seconds (prevents interval+event thundering herd)
+  if (now - _lastVisibilityRefresh < 5000) return;
   const active = document.querySelector('.tab-pane.active');
   if (!active) return;
-  const now = Date.now();
-  if (active.id === 'tab-brief' && now - _briefLastFetch > STALE_MS) loadBrief(false, true);
-  else if (active.id === 'tab-portfolio' && now - _portfolioLastFetch > STALE_MS && Object.keys(portfolio).length) refreshPortfolio();
+  if (active.id === 'tab-brief' && now - _briefLastFetch > STALE_MS) { _lastVisibilityRefresh = now; loadBrief(false, true); }
+  else if (active.id === 'tab-portfolio' && now - _portfolioLastFetch > STALE_MS && Object.keys(portfolio).length) { _lastVisibilityRefresh = now; refreshPortfolio(); }
 });
 
 // ══════════════════════════════════════════════════════
@@ -3546,7 +3588,7 @@ async function deleteMyAccount() {
     if (!data.success) { toast('Delete error: ' + (data.error || 'Unknown error')); return; }
     // ONLY now clear local state
     ['msa_portfolio','msa_watchlist','msa_alerts',
-     'msa_name','msa_dark','msa_ai_pref','msa_onboarded','msa_offline_queue'
+     'msa_name','msa_dark','msa_ai_pref','msa_onboarded','msa_offline_queue','msa_chat_history'
     ].forEach(k => localStorage.removeItem(k));
     ['msa_key','msa_gemini'].forEach(k => { localStorage.removeItem(k); sessionStorage.removeItem(k); });
     if (_supabase) await _supabase.auth.signOut();

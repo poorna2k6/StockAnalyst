@@ -29,7 +29,9 @@
       https://query1.finance.yahoo.com
       https://query2.finance.yahoo.com
       https://corsproxy.io
-      https://api.allorigins.win;
+      https://api.allorigins.win
+      https://corsproxy.tech
+      https://thingproxy.freeboard.io;
     img-src  'self' data: blob:;
     font-src 'self';
     worker-src 'self' blob:;
@@ -1204,10 +1206,13 @@ function goToTab(name){
 // ══════════════════════════════════════════════════════
 // DATA FETCHING
 // ══════════════════════════════════════════════════════
+// Direct Yahoo Finance calls are blocked by CORS in all browsers — never include
+// `u => u` here; it always fails and corrupts the circuit-breaker state.
 const PROXIES = [
-  u => u,
   u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
   u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u => `https://corsproxy.tech/?${encodeURIComponent(u)}`,
+  u => `https://thingproxy.freeboard.io/fetch/${u}`,
 ];
 
 // Circuit breaker for CORS proxies
@@ -1572,6 +1577,18 @@ async function fetchAndRankPicks(trending = []) {
 // ══════════════════════════════════════════════════════
 // TODAY'S BRIEF
 // ══════════════════════════════════════════════════════
+// ── Persistent index quote cache (survives PWA close/reopen) ──────────
+let _staleDataAge = null; // set when we fall back to cached data
+const IDX_CACHE_KEY = 'msa_idx_cache';
+function _saveIdxCache(idxQuotes) {
+  try {
+    localStorage.setItem(IDX_CACHE_KEY, JSON.stringify({ ts: Date.now(), quotes: idxQuotes }));
+  } catch(e) { /* storage full — ignore */ }
+}
+function _loadIdxCache() {
+  try { return JSON.parse(localStorage.getItem(IDX_CACHE_KEY) || 'null'); } catch{ return null; }
+}
+
 async function loadBrief(force=false, autoRefresh=false){
   // Note: _briefLastFetch is set only after successful data load (B2-2)
   _briefLoading = true;
@@ -1588,15 +1605,29 @@ async function loadBrief(force=false, autoRefresh=false){
   // Surface a visible error if all index fetches failed (proxy / network outage)
   const anyIndexLoaded = idxQuotes.some(Boolean);
   if(!anyIndexLoaded){
-    _briefLoading = false;
-    document.getElementById('header-status').textContent = 'Data unavailable';
-    const idxEl2 = document.getElementById('indexes-list');
-    idxEl2.innerHTML = `<div class="text-sm text-red-500 py-2">Market data unavailable — tap <strong>Refresh</strong> to retry.</div>`;
-    document.getElementById('market-pulse').innerHTML = `<div class="text-sm text-gray-400 py-2">Unable to load market data. Check your connection and try again.</div>`;
-    // Clear stale picks so they don't show alongside the error state
-    const picksElErr = document.getElementById('top-picks');
-    if (picksElErr) picksElErr.innerHTML = '';
-    return;
+    // Try to fall back to the last cached index data
+    const cached = _loadIdxCache();
+    if (cached?.quotes?.some(Boolean)) {
+      const ageMs = Date.now() - (cached.ts || 0);
+      const ageStr = ageMs < 3600000 ? `${Math.round(ageMs/60000)}m ago`
+                   : ageMs < 86400000 ? `${Math.round(ageMs/3600000)}h ago`
+                   : `${Math.round(ageMs/86400000)}d ago`;
+      _staleDataAge = ageStr;
+      // Inject cached quotes into the live array so rendering continues normally
+      cached.quotes.forEach((q, i) => { if(q && !idxQuotes[i]) idxQuotes[i] = q; });
+    } else {
+      _briefLoading = false;
+      document.getElementById('header-status').textContent = 'Data unavailable';
+      const idxEl2 = document.getElementById('indexes-list');
+      idxEl2.innerHTML = `<div class="text-sm text-red-500 py-2">Market data unavailable — tap <strong>↻ Refresh</strong> to retry.</div>`;
+      document.getElementById('market-pulse').innerHTML = `<div class="text-sm text-gray-400 py-2">Unable to load market data. Check your connection and try again.</div>`;
+      const picksElErr = document.getElementById('top-picks');
+      if (picksElErr) picksElErr.innerHTML = '';
+      return;
+    }
+  } else {
+    // Successful load — persist for future offline/proxy-failure fallback
+    _saveIdxCache(idxQuotes);
   }
 
   // Render indexes
@@ -1686,7 +1717,9 @@ async function loadBrief(force=false, autoRefresh=false){
 
   // Update header status with live market state
   const statusEl = document.getElementById('header-status');
-  if(statusEl) statusEl.textContent = isMarketHours ? '🟢 Market Open' : isPreMarket ? '🌅 Pre-Market' : '🔴 Market Closed';
+  const marketStateText = isMarketHours ? '🟢 Market Open' : isPreMarket ? '🌅 Pre-Market' : '🔴 Market Closed';
+  if(statusEl) statusEl.textContent = _staleDataAge ? `⚠️ Saved data (${_staleDataAge})` : marketStateText;
+  _staleDataAge = null; // reset after render
 
   // Top picks: fetch and rank 32-stock candidate pool in real-time
   const rankedPicks = await fetchAndRankPicks(trending);

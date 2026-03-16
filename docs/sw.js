@@ -2,7 +2,7 @@
 // My Stock Analyst — Service Worker
 // ══════════════════════════════════════════════════════
 
-const CACHE_NAME = 'msa-v3';
+const CACHE_NAME = 'msa-v4';
 const QUEUE_STORE = 'offline-queue';
 const DB_NAME = 'msa-sw-db';
 const DB_VERSION = 1;
@@ -50,36 +50,23 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   if (url.hostname !== self.location.hostname) return;
 
-  // Network-first for HTML navigation (always gets latest app);
-  // cache-first for everything else (JS, CSS, images)
+  // Network-first for all same-origin requests so app updates roll out immediately.
+  // Falls back to cache when offline.
   if (url.hostname === self.location.hostname) {
-    const isNavigation = event.request.mode === 'navigate' ||
-      event.request.headers.get('accept')?.includes('text/html');
-
-    if (isNavigation) {
-      event.respondWith(
-        fetch(event.request).then(response => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-          }
-          return response;
-        }).catch(() => caches.match('./index.html'))
-      );
-    } else {
-      event.respondWith(
-        caches.match(event.request).then(cached => {
-          if (cached) return cached;
-          return fetch(event.request).then(response => {
-            if (response.ok) {
-              const clone = response.clone();
-              caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-            }
-            return response;
-          }).catch(() => new Response('', {status:503,statusText:'Offline'}));
-        })
-      );
-    }
+    event.respondWith(
+      fetch(event.request).then(response => {
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        }
+        return response;
+      }).catch(() =>
+        caches.match(event.request).then(cached =>
+          cached || caches.match('./index.html') ||
+          new Response('', { status: 503, statusText: 'Offline' })
+        )
+      )
+    );
   }
 });
 

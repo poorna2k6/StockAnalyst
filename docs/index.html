@@ -1767,6 +1767,13 @@ async function loadBrief(force=false, autoRefresh=false){
   if (!autoRefresh) {
     loadAIBrief(idxQuotes, rankedPicks, trending);
   }
+  } catch(e) {
+    console.error('loadBrief error:', e);
+    document.getElementById('header-status').textContent = 'Data unavailable';
+    const idxEl3 = document.getElementById('indexes-list');
+    if (idxEl3) idxEl3.innerHTML = `<div class="text-sm text-red-500 py-2">Market data unavailable — tap <strong>↻ Refresh</strong> to retry.</div>`;
+    const pulseEl3 = document.getElementById('market-pulse');
+    if (pulseEl3) pulseEl3.innerHTML = `<div class="text-sm text-gray-400 py-2">Unable to load market data. Check your connection and try again.</div>`;
   } finally {
     _briefLoading = false;
   }

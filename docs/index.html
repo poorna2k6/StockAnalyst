@@ -706,8 +706,24 @@
       </div>
     </div>
 
-    <!-- Build version — helps confirm latest code is deployed -->
-    <div class="text-center text-xs text-gray-300 pb-1" id="settings-build"></div>
+    <!-- Deployment Info -->
+    <div class="border-t border-gray-100 pt-4">
+      <div class="section-label">Deployment Info</div>
+      <div class="bg-gray-50 rounded-xl p-3 space-y-2 text-xs">
+        <div class="flex justify-between items-center">
+          <span class="text-gray-500">Version</span>
+          <span class="font-mono font-bold text-purple-700" id="si-version"></span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-gray-500">Deployed</span>
+          <span class="font-mono text-gray-700" id="si-deployed"></span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-gray-500">Commit</span>
+          <span class="font-mono text-gray-400" id="si-commit"></span>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -886,11 +902,10 @@ let watchlist = safeJsonParse('msa_watchlist', []);
 let alerts   = safeJsonParse('msa_alerts',    {});
 let _darkMode = localStorage.getItem('msa_dark') === '1';
 
-const BUILD = 'v2.9 · ' + new Date().toISOString().slice(0,10);
-// Show build version immediately so users can always confirm which version is deployed
+const BUILD = { version: 'v3.0.0', deployedAt: '2026-06-05 03:19 UTC', commit: '84b2163' };
 document.addEventListener('DOMContentLoaded', () => {
   const el = document.getElementById('header-build');
-  if(el) el.textContent = BUILD;
+  if(el) el.textContent = BUILD.version + ' · ' + BUILD.deployedAt;
 });
 
 function getErrorMsg(context, err) {
@@ -1049,8 +1064,10 @@ function openSettings(){
   document.getElementById('settings-gemini-key').value = geminiKey;
   document.getElementById('settings-ai-pref').value = aiPref;
   document.getElementById('settings-name').value = userName;
-  const bi = document.getElementById('settings-build');
-  if(bi) bi.textContent = 'Build ' + BUILD;
+  const _si = id => document.getElementById(id);
+  if(_si('si-version'))  _si('si-version').textContent  = BUILD.version;
+  if(_si('si-deployed')) _si('si-deployed').textContent = BUILD.deployedAt;
+  if(_si('si-commit'))   _si('si-commit').textContent   = BUILD.commit;
   openModal('settings-modal');
 }
 function closeSettings(){ closeModal('settings-modal'); }

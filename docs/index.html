@@ -828,7 +828,7 @@ let watchlist = safeJsonParse('msa_watchlist', []);
 let alerts   = safeJsonParse('msa_alerts',    {});
 let _darkMode = localStorage.getItem('msa_dark') === '1';
 
-const BUILD = { version: 'v3.1.0', deployedAt: '2026-06-05 07:48 UTC', commit: 'b6ea5ce' };
+const BUILD = { version: 'v3.1.1', deployedAt: '2026-06-05 17:27 UTC', commit: '98854b6' };
 document.addEventListener('DOMContentLoaded', () => {
   const el = document.getElementById('header-build');
   if(el) el.textContent = BUILD.version + ' · ' + BUILD.deployedAt;
@@ -2066,31 +2066,15 @@ function extractTickers(text){
 }
 
 function quickAsk(msg){
-  // UX-7: detect if we're currently on Brief tab before switching
-  const wasOnBrief = document.getElementById('tab-brief')?.classList.contains('active');
-  goToTab('analyst');
-  // UX-7: Add "Back to Brief" chip if coming from Brief tab
-  if(wasOnBrief){
-    const chatEl = document.getElementById('chat-messages');
-    if(chatEl){
-      const existing = chatEl.querySelector('.back-to-brief-chip');
-      if(!existing){
-        const chip = document.createElement('div');
-        chip.className = 'back-to-brief-chip text-xs text-blue-500 cursor-pointer mb-2';
-        chip.textContent = '← Back to Brief';
-        chip.onclick = () => goToTab('brief');
-        chatEl.insertBefore(chip, chatEl.firstChild);
-      }
-    }
-  }
-  document.getElementById('chat-input').value = msg;
-  handleChat();
+  goToTab('stockchat');
+  const input = document.getElementById('sc-input');
+  if(input){ input.value = msg; handleStockChat(); }
 }
 
 let _chatBusy = false;
 async function handleChat(){
   if(_chatBusy) return;
-  const input = document.getElementById('chat-input');
+  const input = document.getElementById('sc-input');
   const msg = input.value.trim(); if(!msg) return;
   input.value = '';
   const sendBtn = input.nextElementSibling;
@@ -2234,7 +2218,7 @@ STYLE RULES:
         };
         starRow.appendChild(btn);
       });
-      const chatEl = document.getElementById('chat-messages');
+      const chatEl = document.getElementById('sc-messages');
       chatEl.appendChild(starRow);
     }
   } catch(err){
@@ -2247,9 +2231,9 @@ STYLE RULES:
         loadEl.remove();
       }
       _chatBusy = false;
-      document.getElementById('chat-input').disabled = false;
-      document.getElementById('chat-input').nextElementSibling.disabled = false;
-      document.getElementById('chat-input').nextElementSibling.style.opacity = '1';
+      document.getElementById('sc-input').disabled = false;
+      document.getElementById('sc-input').nextElementSibling.disabled = false;
+      document.getElementById('sc-input').nextElementSibling.style.opacity = '1';
       return;
     } else {
       loadEl.className='chat-msg-ai';
@@ -2264,7 +2248,7 @@ STYLE RULES:
 }
 
 function appendMsg(role, text, isLoading=false){
-  const el = document.getElementById('chat-messages');
+  const el = document.getElementById('sc-messages');
   const div = document.createElement('div');
   div.className = role==='user'?'chat-msg-user':'chat-msg-ai';
   if(isLoading) div.className='chat-msg-ai';
@@ -2284,10 +2268,10 @@ function addCopyBtn(msgEl){
   };
   msgEl.parentNode.insertBefore(btn, msgEl.nextSibling);
 }
-function scrollChat(){ const el=document.getElementById('chat-messages'); if(el) el.scrollTop=el.scrollHeight; }
+function scrollChat(){ const el=document.getElementById('sc-messages'); if(el) el.scrollTop=el.scrollHeight; }
 
 function renderChatWelcome() {
-  const chatEl = document.getElementById('chat-messages');
+  const chatEl = document.getElementById('sc-messages');
   if (!chatEl) return;
   chatEl.innerHTML = `<div class="chat-msg-ai">
     Hi! I'm your personal stock analyst. I use real market data and AI to help you make smarter investment decisions.<br><br>
@@ -2305,7 +2289,7 @@ function clearChatHistory() {
   if (!confirm('Clear all chat history? This cannot be undone.')) return;
   chatHistory = [];
   try { localStorage.removeItem('msa_chat_history'); } catch {}
-  document.getElementById('chat-messages').innerHTML = '';
+  document.getElementById('sc-messages').innerHTML = '';
   renderChatWelcome();
   toast('Chat cleared');
 }
@@ -2511,7 +2495,7 @@ function renderMarkdown(text){
     .replace(/─{3,}|━{3,}|—{3,}/g, '<hr class="border-gray-200 my-2">');
 }
 
-document.getElementById('chat-input').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); handleChat(); } });
+document.getElementById('sc-input')?.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); handleStockChat(); } });
 document.getElementById('brief-search').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); briefSearch(); } });
 
 // ══════════════════════════════════════════════════════

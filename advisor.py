@@ -1,35 +1,170 @@
-"""AI-powered advisor using Claude — all responses grounded in fetched data."""
+"""AI advisor — Claude and Gemini, grounded in fetched data, with token tracking."""
 
+import asyncio
 import os
+from typing import Optional
+
 import anthropic
 
 from models import PortfolioSummary, DeepStockAnalysis, ScreenerResult, DayPick, LongTermPick
 from news_fetcher import format_news_for_prompt
 
-# ── Shared system prompt ──────────────────────────────────────────────────────
+# ── Shared grounding system prompt ────────────────────────────────────────────
 
 _GROUNDED_SYSTEM = (
     "You are a rigorous financial analyst assistant. "
     "You will be given a DATA BLOCK containing real-time market data fetched from Yahoo Finance. "
-    "\n\nSTRICT RULES — read carefully before responding:\n"
-    "1. Base ALL your analysis EXCLUSIVELY on data in the DATA BLOCK. "
-    "Do NOT use statistics, prices, or facts from your training data.\n"
-    "2. If a field shows 'N/A' or is missing, state 'data unavailable' — never estimate or fill gaps.\n"
+    "\n\nSTRICT RULES:\n"
+    "1. Base ALL analysis EXCLUSIVELY on data in the DATA BLOCK. "
+    "Do NOT use prices, statistics, or facts from your training data.\n"
+    "2. If a field shows 'N/A' or is missing, say 'data unavailable' — never estimate.\n"
     "3. Cite the section name in brackets when referencing a data point, e.g. [Technicals] RSI 58.4.\n"
-    "4. Do not provide specific price targets beyond what analyst data already shows.\n"
-    "5. End every response with: 'Data fetched: {fetched_at}. This is educational analysis, not financial advice.'\n"
+    "4. Do not provide price targets beyond what analyst data shows.\n"
+    "5. End every response with: 'Data fetched: {fetched_at}. Educational analysis, not financial advice.'\n"
+)
+
+# ── Agent Council personas ────────────────────────────────────────────────────
+
+_BULL_SYSTEM = (
+    "You are an optimistic equity analyst making the STRONGEST POSSIBLE BULL CASE. "
+    "Focus on: positive momentum, revenue/earnings growth, margin expansion, analyst upgrades, "
+    "institutional accumulation, competitive moats, positive news catalysts. "
+    "Cite specific numbers from the DATA BLOCK only. Keep it 200-250 words. No invented data."
+)
+
+_BEAR_SYSTEM = (
+    "You are a skeptical risk analyst making the STRONGEST POSSIBLE BEAR CASE. "
+    "Focus on: overvaluation, negative momentum, rising competition, debt load, "
+    "insider selling, analyst downgrades, earnings disappointment risk, negative news. "
+    "Cite specific numbers from the DATA BLOCK only. Keep it 200-250 words. No invented data."
+)
+
+_RISK_SYSTEM = (
+    "You are a quantitative risk manager focused on downside risk. "
+    "Focus on: beta/volatility, upcoming earnings dates, macro/sector risk, "
+    "support/resistance levels from the technicals, position sizing caution. "
+    "Cite specific numbers from the DATA BLOCK only. Keep it 200-250 words. No invented data."
+)
+
+_MODERATOR_SYSTEM = (
+    "You are a senior investment committee chair synthesizing three analyst opinions. "
+    "Structure your response EXACTLY as:\n"
+    "## CONSENSUS\n(what all three analysts agree on)\n\n"
+    "## KEY DEBATE\n(the main disagreement between bull and bear)\n\n"
+    "## RISK FACTORS\n(top 2-3 risks from the risk analyst)\n\n"
+    "## VERDICT\n**Buy / Hold / Sell** — Confidence: X/10\n\n"
+    "## RATIONALE\n(2-3 sentences grounded in the data)\n\n"
+    "Keep total response under 300 words."
 )
 
 
-def _get_client() -> anthropic.Anthropic | None:
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+# ── Model client helpers ──────────────────────────────────────────────────────
+
+def _resolve_api_key(model: str, user_settings: Optional[dict]) -> str | None:
+    """Return the API key to use: BYOK if configured, else server env key."""
+    if user_settings and user_settings.get("use_byok"):
+        if model == "gemini":
+            return user_settings.get("byok_gemini_key") or os.getenv("GEMINI_API_KEY")
+        return user_settings.get("byok_claude_key") or os.getenv("ANTHROPIC_API_KEY")
+    return os.getenv("GEMINI_API_KEY") if model == "gemini" else os.getenv("ANTHROPIC_API_KEY")
+
+
+def _is_byok(user_settings: Optional[dict]) -> bool:
+    return bool(user_settings and user_settings.get("use_byok"))
+
+
+def _claude_model(user_settings: Optional[dict]) -> str:
+    return "claude-sonnet-4-6"
+
+
+def _gemini_model(user_settings: Optional[dict]) -> str:
+    return "gemini-1.5-flash"
+
+
+# ── Sync AI call (Claude or Gemini) ──────────────────────────────────────────
+
+def _call_ai(
+    prompt: str,
+    system: str,
+    max_tokens: int,
+    user_settings: Optional[dict] = None,
+) -> tuple[str, str, int, int]:
+    """
+    Call Claude or Gemini based on user_settings.preferred_model.
+    Returns: (text, model_name, input_tokens, output_tokens)
+    """
+    model_pref = (user_settings or {}).get("preferred_model", "claude")
+
+    if model_pref == "gemini":
+        return _call_gemini(prompt, system, max_tokens, user_settings)
+    return _call_claude(prompt, system, max_tokens, user_settings)
+
+
+def _call_claude(
+    prompt: str,
+    system: str,
+    max_tokens: int,
+    user_settings: Optional[dict] = None,
+) -> tuple[str, str, int, int]:
+    api_key = _resolve_api_key("claude", user_settings)
     if not api_key:
-        return None
-    return anthropic.Anthropic(api_key=api_key)
+        return "ANTHROPIC_API_KEY not configured. Add it to .env or provide your own key in Settings.", "claude-sonnet-4-6", 0, 0
+    model = _claude_model(user_settings)
+    client = anthropic.Anthropic(api_key=api_key)
+    msg = client.messages.create(
+        model=model,
+        max_tokens=max_tokens,
+        messages=[{"role": "user", "content": prompt}],
+        system=system,
+    )
+    return msg.content[0].text, model, msg.usage.input_tokens, msg.usage.output_tokens
 
 
-def _no_key_msg() -> str:
-    return "ANTHROPIC_API_KEY not set. Set it in your .env file to receive AI-powered analysis."
+def _call_gemini(
+    prompt: str,
+    system: str,
+    max_tokens: int,
+    user_settings: Optional[dict] = None,
+) -> tuple[str, str, int, int]:
+    api_key = _resolve_api_key("gemini", user_settings)
+    if not api_key:
+        return "GEMINI_API_KEY not configured. Add it to .env or provide your own key in Settings.", "gemini-1.5-flash", 0, 0
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        model_name = _gemini_model(user_settings)
+        model_obj = genai.GenerativeModel(
+            model_name,
+            system_instruction=system,
+            generation_config={"max_output_tokens": max_tokens},
+        )
+        response = model_obj.generate_content(prompt)
+        text = response.text
+        usage = response.usage_metadata
+        in_t = getattr(usage, "prompt_token_count", 0) or 0
+        out_t = getattr(usage, "candidates_token_count", 0) or 0
+        return text, model_name, in_t, out_t
+    except ImportError:
+        return "google-generativeai package not installed. Run: pip install google-generativeai", "gemini-1.5-flash", 0, 0
+
+
+# ── Async AI call (for agent council) ────────────────────────────────────────
+
+async def _call_claude_async(
+    prompt: str,
+    system: str,
+    max_tokens: int,
+    api_key: str,
+    model: str = "claude-haiku-4-5-20251001",
+) -> tuple[str, int, int]:
+    client = anthropic.AsyncAnthropic(api_key=api_key)
+    msg = await client.messages.create(
+        model=model,
+        max_tokens=max_tokens,
+        messages=[{"role": "user", "content": prompt}],
+        system=system,
+    )
+    return msg.content[0].text, msg.usage.input_tokens, msg.usage.output_tokens
 
 
 # ── Portfolio context builder ─────────────────────────────────────────────────
@@ -56,69 +191,15 @@ def _build_portfolio_context(summary: PortfolioSummary) -> str:
     return "\n".join(lines)
 
 
-# ── Original get_advice (backward compatible, upgraded tokens + grounding) ────
-
-def get_advice(
-    summary: PortfolioSummary,
-    question: str | None = None,
-    risk_tolerance: str = "moderate",
-) -> str:
-    client = _get_client()
-    if client is None:
-        return _no_key_msg()
-
-    portfolio_context = _build_portfolio_context(summary)
-    risk_desc = {
-        "conservative": "prefers capital preservation, low volatility, dividend-paying stocks and bonds",
-        "moderate": "seeks balanced growth with manageable risk, mix of growth and value stocks",
-        "aggressive": "seeks maximum growth, comfortable with high volatility and concentrated positions",
-    }.get(risk_tolerance, "seeks balanced growth with manageable risk")
-
-    system_prompt = (
-        "You are an experienced financial analyst and portfolio advisor. "
-        "Analyze the portfolio data provided. Be specific about tickers and numbers. "
-        "Only reference the portfolio data given — do not add external market opinions from training data. "
-        "Always note that this is educational analysis, not official financial advice. "
-        "Keep responses structured and actionable."
-    )
-
-    user_message = (
-        f"Risk tolerance: {risk_tolerance} ({risk_desc}).\n\n"
-        f"=== PORTFOLIO DATA (fetched live) ===\n{portfolio_context}\n\n"
-    )
-    if question:
-        user_message += f"Question: {question}"
-    else:
-        user_message += (
-            "Please analyze this portfolio and provide:\n"
-            "1. Overall assessment (diversification, concentration risk)\n"
-            "2. Top performing and underperforming positions\n"
-            "3. Key risks to be aware of\n"
-            "4. Actionable recommendations (trim, hold, or consider adding)\n"
-            "5. Rebalancing suggestions if needed"
-        )
-
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=3000,
-        messages=[{"role": "user", "content": user_message}],
-        system=system_prompt,
-    )
-    return message.content[0].text
-
-
-# ── Deep stock analysis ───────────────────────────────────────────────────────
+# ── Data block builder ────────────────────────────────────────────────────────
 
 def _build_deep_data_block(analysis: DeepStockAnalysis) -> str:
-    """Serialize DeepStockAnalysis into a structured text block for Claude."""
     lines = [
         f"=== DATA BLOCK FOR {analysis.ticker} ===",
         f"Company: {analysis.name or 'N/A'}",
         f"Data fetched: {analysis.fetched_at}",
         "",
     ]
-
-    # Quote
     if analysis.quote:
         q = analysis.quote
         lines += [
@@ -129,8 +210,6 @@ def _build_deep_data_block(analysis: DeepStockAnalysis) -> str:
             f"Market Cap: ${(q.market_cap/1e9):.1f}B" if q.market_cap else "Market Cap: N/A",
             "",
         ]
-
-    # Technicals
     if analysis.technicals:
         t = analysis.technicals
         lines += [
@@ -144,8 +223,6 @@ def _build_deep_data_block(analysis: DeepStockAnalysis) -> str:
             f"Signals: {'; '.join(t.signals) if t.signals else 'None'}",
             "",
         ]
-
-    # Fundamentals
     if analysis.fundamentals:
         f = analysis.fundamentals
         lines += [
@@ -155,166 +232,234 @@ def _build_deep_data_block(analysis: DeepStockAnalysis) -> str:
             f"P/B: {f.pb_ratio or 'N/A'} | PEG: {f.peg_ratio or 'N/A'}",
             f"EPS (trailing): {f.eps_trailing or 'N/A'} | EPS (forward): {f.eps_forward or 'N/A'}",
             f"ROE: {(f.roe*100):.1f}%" if f.roe is not None else "ROE: N/A",
-            f"ROA: {(f.roa*100):.1f}%" if f.roa is not None else "ROA: N/A",
             f"Debt/Equity: {f.debt_to_equity or 'N/A'}",
             f"Revenue Growth (YoY): {(f.revenue_growth*100):.1f}%" if f.revenue_growth is not None else "Revenue Growth: N/A",
-            f"Earnings Growth: {(f.earnings_growth*100):.1f}%" if f.earnings_growth is not None else "Earnings Growth: N/A",
             f"Profit Margin: {(f.profit_margin*100):.1f}%" if f.profit_margin is not None else "Profit Margin: N/A",
             f"Free Cash Flow: ${f.free_cashflow/1e9:.1f}B" if f.free_cashflow is not None else "Free Cash Flow: N/A",
-            f"Dividend Yield: {(f.dividend_yield*100):.2f}%" if f.dividend_yield else "Dividend Yield: N/A",
             f"Beta: {f.beta or 'N/A'}",
             f"Analyst Target (mean): ${f.target_mean_price or 'N/A'} | Recommendation: {f.recommendation or 'N/A'}",
             "",
         ]
-
-    # Fundamental score
     if analysis.fundamental_score:
         fs = analysis.fundamental_score
         lines += [
-            "[FUNDAMENTAL SCORE — rule-based, not AI-generated]",
+            "[FUNDAMENTAL SCORE — rule-based]",
             f"Score: {fs.score}/10",
             f"Reasoning: {'; '.join(fs.reasoning)}",
             "",
         ]
-
-    # Analyst data
     if analysis.analyst_data:
         ad = analysis.analyst_data
         lines += [
-            "[ANALYST DATA — from Yahoo Finance .recommendations]",
+            "[ANALYST DATA]",
             f"Consensus: {ad.consensus or 'N/A'} | Strong Buy: {ad.strong_buy_count} | Buy: {ad.buy_count} | Hold: {ad.hold_count} | Sell: {ad.sell_count}",
-            f"Next Earnings Date: {ad.earnings_date or 'N/A'} | EPS Estimate: {ad.eps_estimate or 'N/A'}",
+            f"Next Earnings: {ad.earnings_date or 'N/A'} | EPS Estimate: {ad.eps_estimate or 'N/A'}",
         ]
         if ad.recent_recommendations:
-            lines.append("Recent Analyst Actions:")
             for rec in ad.recent_recommendations[:5]:
                 lines.append(f"  {rec.get('date','')} | {rec.get('firm','')} | {rec.get('to_grade','')} | {rec.get('action','')}")
         lines.append("")
-
-    # Institutional
     if analysis.institutional_data:
         inst = analysis.institutional_data
         lines += [
-            "[INSTITUTIONAL — from Yahoo Finance .institutional_holders]",
-            f"% Held by Insiders: {(inst.pct_insiders*100):.1f}%" if inst.pct_insiders is not None else "% Insiders: N/A",
-            f"% Held by Institutions: {(inst.pct_institutions*100):.1f}%" if inst.pct_institutions is not None else "% Institutions: N/A",
+            "[INSTITUTIONAL]",
+            f"% Insiders: {(inst.pct_insiders*100):.1f}%" if inst.pct_insiders is not None else "% Insiders: N/A",
+            f"% Institutions: {(inst.pct_institutions*100):.1f}%" if inst.pct_institutions is not None else "% Institutions: N/A",
         ]
         if inst.top_holders:
-            lines.append("Top Institutional Holders:")
             for h in inst.top_holders[:5]:
                 pct = f"{h.get('pct_held',0)*100:.2f}%" if h.get('pct_held') is not None else "N/A"
                 lines.append(f"  {h.get('holder','?')} — {pct}")
         lines.append("")
-
-    # News
     if analysis.news and analysis.news.articles:
-        lines += [
-            "[RECENT NEWS — from Yahoo Finance .news (last 7 days)]",
-            format_news_for_prompt(analysis.news),
-            "",
-        ]
-
+        lines += ["[RECENT NEWS]", format_news_for_prompt(analysis.news), ""]
     lines.append("=== END DATA BLOCK ===")
     return "\n".join(lines)
 
 
-def get_deep_analysis_advice(analysis: DeepStockAnalysis, question: str | None = None) -> str:
-    """
-    Generate a comprehensive stock analysis grounded in pre-fetched data.
-    Claude is only allowed to reference data in the DATA BLOCK.
-    """
-    client = _get_client()
-    if client is None:
-        return _no_key_msg()
+# ── Public advisor functions ──────────────────────────────────────────────────
 
+def get_advice(
+    summary: PortfolioSummary,
+    question: Optional[str] = None,
+    risk_tolerance: str = "moderate",
+    user_settings: Optional[dict] = None,
+    user_id: Optional[str] = None,
+) -> str:
+    risk_desc = {
+        "conservative": "prefers capital preservation, low volatility, dividend-paying stocks",
+        "moderate": "seeks balanced growth with manageable risk",
+        "aggressive": "seeks maximum growth, comfortable with high volatility",
+    }.get(risk_tolerance, "seeks balanced growth with manageable risk")
+
+    system = (
+        "You are an experienced portfolio advisor. Analyze only the portfolio data provided. "
+        "Be specific about tickers and numbers. This is educational analysis, not financial advice."
+    )
+    user_msg = (
+        f"Risk tolerance: {risk_tolerance} ({risk_desc}).\n\n"
+        f"=== PORTFOLIO DATA ===\n{_build_portfolio_context(summary)}\n\n"
+    )
+    user_msg += question if question else (
+        "Please analyze this portfolio:\n"
+        "1. Overall assessment (diversification, concentration risk)\n"
+        "2. Top performing and underperforming positions\n"
+        "3. Key risks\n"
+        "4. Actionable recommendations\n"
+        "5. Rebalancing suggestions"
+    )
+
+    text, model, in_t, out_t = _call_ai(user_msg, system, 3000, user_settings)
+    if user_id:
+        import token_tracker
+        token_tracker.track_usage(user_id, "portfolio_advice", model, in_t, out_t, _is_byok(user_settings))
+    return text
+
+
+def get_deep_analysis_advice(
+    analysis: DeepStockAnalysis,
+    question: Optional[str] = None,
+    user_settings: Optional[dict] = None,
+    user_id: Optional[str] = None,
+) -> str:
     data_block = _build_deep_data_block(analysis)
     system = _GROUNDED_SYSTEM.replace("{fetched_at}", analysis.fetched_at)
-
-    if question:
-        task = f"Answer this specific question about {analysis.ticker}: {question}"
-    else:
-        task = (
-            f"Based solely on the DATA BLOCK above, provide a comprehensive analysis of {analysis.ticker}:\n"
-            "1. **Technical Picture** — current trend, key momentum signals, support/resistance context\n"
-            "2. **Fundamental Assessment** — valuation (P/E, PEG), quality (ROE, margins, FCF), growth\n"
-            "3. **Analyst & Institutional Sentiment** — consensus, major holder changes\n"
-            "4. **News-Driven Catalysts or Risks** — cite specific headlines from the data\n"
-            "5. **Bull Case vs Bear Case** — supported by data points only\n"
-            "6. **Verdict** — short-term trade / long-term hold / avoid — with explicit data rationale\n"
-        )
-
-    user_message = f"{data_block}\n\n{task}"
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=4096,
-        messages=[{"role": "user", "content": user_message}],
-        system=system,
+    task = (
+        f"Answer this specific question about {analysis.ticker}: {question}"
+        if question else
+        f"Provide a comprehensive analysis of {analysis.ticker}:\n"
+        "1. **Technical Picture** — trend, momentum signals, support/resistance context\n"
+        "2. **Fundamental Assessment** — valuation, quality (ROE, margins, FCF), growth\n"
+        "3. **Analyst & Institutional Sentiment** — consensus, holder changes\n"
+        "4. **News-Driven Catalysts or Risks** — cite specific headlines\n"
+        "5. **Bull Case vs Bear Case** — data points only\n"
+        "6. **Verdict** — short-term trade / long-term hold / avoid with explicit data rationale"
     )
-    return message.content[0].text
+
+    text, model, in_t, out_t = _call_ai(f"{data_block}\n\n{task}", system, 4096, user_settings)
+    if user_id:
+        import token_tracker
+        token_tracker.track_usage(user_id, "deep_analysis", model, in_t, out_t, _is_byok(user_settings))
+    return text
 
 
-# ── Screener narrative ────────────────────────────────────────────────────────
-
-def get_screener_advice(result: ScreenerResult) -> str:
-    """
-    Claude explains WHY the screener's top picks ranked highly.
-    Claude does not pick stocks — it synthesizes the scoring data.
-    """
-    client = _get_client()
-    if client is None:
-        return _no_key_msg()
-
+def get_screener_advice(
+    result: ScreenerResult,
+    user_settings: Optional[dict] = None,
+    user_id: Optional[str] = None,
+) -> str:
     mode = result.screener_type
     picks = result.picks
-
     if not picks:
         return "No picks found in screener results."
 
     lines = [
         f"=== SCREENER DATA BLOCK ({mode.upper()}) ===",
-        f"Screener type: {mode}",
-        f"Universe evaluated: {result.universe_size} tickers",
-        f"Fetched at: {result.fetched_at}",
-        f"Top {len(picks)} picks ranked by algorithm:",
+        f"Universe: {result.universe_size} tickers | Fetched: {result.fetched_at}",
         "",
     ]
-
     for i, pick in enumerate(picks, 1):
         if isinstance(pick, DayPick):
-            lines.append(f"{i}. {pick.ticker} — Score: {pick.composite_score:.2f}/10")
-            lines.append(f"   Price: ${pick.price or 'N/A'} | 1d: {pick.momentum_1d or 'N/A'}% | 5d: {pick.momentum_5d or 'N/A'}%")
-            lines.append(f"   Volume ratio: {pick.volume_ratio or 'N/A'}x | RSI: {pick.rsi_14 or 'N/A'} | News: {pick.news_count} articles")
-            lines.append(f"   Score reasoning: {'; '.join(pick.reasoning)}")
+            lines += [
+                f"{i}. {pick.ticker} — Score: {pick.composite_score:.2f}/10",
+                f"   ${pick.price or 'N/A'} | 1d: {pick.momentum_1d or 'N/A'}% | 5d: {pick.momentum_5d or 'N/A'}%",
+                f"   Volume: {pick.volume_ratio or 'N/A'}x | RSI: {pick.rsi_14 or 'N/A'} | News: {pick.news_count}",
+                f"   Reasoning: {'; '.join(pick.reasoning)}",
+            ]
         elif isinstance(pick, LongTermPick):
-            lines.append(f"{i}. {pick.ticker} ({pick.sector or 'Unknown sector'}) — Score: {pick.composite_score:.2f}/10")
-            lines.append(f"   ROE: {(pick.roe*100):.1f}%" if pick.roe else "   ROE: N/A")
-            lines.append(f"   Revenue Growth: {(pick.revenue_growth*100):.1f}%" if pick.revenue_growth else "   Revenue Growth: N/A")
-            lines.append(f"   D/E: {pick.debt_to_equity or 'N/A'} | Profit Margin: {(pick.profit_margin*100):.1f}%" if pick.profit_margin else f"   D/E: {pick.debt_to_equity or 'N/A'} | Profit Margin: N/A")
-            lines.append(f"   Score reasoning: {'; '.join(pick.reasoning)}")
+            lines += [
+                f"{i}. {pick.ticker} ({pick.sector or '?'}) — Score: {pick.composite_score:.2f}/10",
+                f"   ROE: {(pick.roe*100):.1f}%" if pick.roe else "   ROE: N/A",
+                f"   D/E: {pick.debt_to_equity or 'N/A'} | Margin: {(pick.profit_margin*100):.1f}%" if pick.profit_margin else f"   D/E: {pick.debt_to_equity or 'N/A'}",
+                f"   Reasoning: {'; '.join(pick.reasoning)}",
+            ]
         lines.append("")
 
     lines.append("=== END SCREENER DATA BLOCK ===")
     data_block = "\n".join(lines)
-
     system = _GROUNDED_SYSTEM.replace("{fetched_at}", result.fetched_at)
-    if mode == "best_of_day":
-        task = (
-            "Based solely on the SCREENER DATA BLOCK above, explain why these stocks scored highest today. "
-            "For each pick, describe the specific momentum signals and volume patterns that drove its ranking. "
-            "Note any risks visible in the data. Do not fabricate information not in the data block. "
-            "Keep the narrative concise and actionable."
-        )
-    else:
-        task = (
-            "Based solely on the SCREENER DATA BLOCK above, explain why these stocks scored highest for long-term quality. "
-            "For each pick, highlight the specific fundamental strengths (ROE, growth, FCF, debt) that drove its score. "
-            "Note any weaknesses visible in the data. Do not fabricate information not in the data block."
-        )
-
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=2048,
-        messages=[{"role": "user", "content": f"{data_block}\n\n{task}"}],
-        system=system,
+    task = (
+        "Explain why these stocks scored highest today based ONLY on the screener data above."
+        if mode == "best_of_day" else
+        "Explain why these stocks scored highest for long-term quality based ONLY on the screener data above."
     )
-    return message.content[0].text
+
+    text, model, in_t, out_t = _call_ai(f"{data_block}\n\n{task}", system, 2048, user_settings)
+    if user_id:
+        import token_tracker
+        token_tracker.track_usage(user_id, "screener", model, in_t, out_t, _is_byok(user_settings))
+    return text
+
+
+def get_chat_response(
+    message: str,
+    context_data: str,
+    user_settings: Optional[dict] = None,
+    user_id: Optional[str] = None,
+) -> str:
+    """General investment chat with injected live market data context."""
+    system = (
+        "You are an expert investment analyst with access to real-time market data. "
+        "RULES: Only cite numbers from the LIVE MARKET DATA block. Never invent prices or ratios. "
+        "For ranking questions score by: momentum + fundamentals + analyst sentiment. "
+        "Always mention live price and 1-day change when discussing a specific stock. "
+        "End responses with '⚠️ Not financial advice.' Keep responses under 500 words."
+    )
+    prompt = f"{context_data}\n\nUser question: {message}"
+
+    text, model, in_t, out_t = _call_ai(prompt, system, 2000, user_settings)
+    if user_id:
+        import token_tracker
+        token_tracker.track_usage(user_id, "chat", model, in_t, out_t, _is_byok(user_settings))
+    return text
+
+
+# ── Agent Council (async, 3 agents + moderator) ───────────────────────────────
+
+async def get_agent_council(
+    analysis: DeepStockAnalysis,
+    user_settings: Optional[dict] = None,
+    user_id: Optional[str] = None,
+) -> dict:
+    """Run Bull / Bear / Risk agents in parallel, then synthesize with Moderator."""
+    api_key = _resolve_api_key("claude", user_settings)
+    if not api_key:
+        return {"error": "ANTHROPIC_API_KEY not configured"}
+
+    data_block = _build_deep_data_block(analysis)
+    haiku = "claude-haiku-4-5-20251001"
+    sonnet = "claude-sonnet-4-6"
+
+    bull_t, bear_t, risk_t = await asyncio.gather(
+        _call_claude_async(data_block, _BULL_SYSTEM, 500, api_key, haiku),
+        _call_claude_async(data_block, _BEAR_SYSTEM, 500, api_key, haiku),
+        _call_claude_async(data_block, _RISK_SYSTEM, 500, api_key, haiku),
+    )
+    bull_text, bull_in, bull_out = bull_t
+    bear_text, bear_in, bear_out = bear_t
+    risk_text, risk_in, risk_out = risk_t
+
+    moderator_input = (
+        f"{data_block}\n\n"
+        f"=== BULL CASE ===\n{bull_text}\n\n"
+        f"=== BEAR CASE ===\n{bear_text}\n\n"
+        f"=== RISK ASSESSMENT ===\n{risk_text}\n\n"
+        "Now synthesize these three perspectives."
+    )
+    mod_text, mod_in, mod_out = await _call_claude_async(moderator_input, _MODERATOR_SYSTEM, 600, api_key, sonnet)
+
+    if user_id:
+        import token_tracker
+        byok = _is_byok(user_settings)
+        token_tracker.track_usage(user_id, "council", haiku, bull_in + bear_in + risk_in, bull_out + bear_out + risk_out, byok)
+        token_tracker.track_usage(user_id, "council", sonnet, mod_in, mod_out, byok)
+
+    return {
+        "ticker": analysis.ticker,
+        "name": analysis.name,
+        "bull": bull_text,
+        "bear": bear_text,
+        "risk": risk_text,
+        "verdict": mod_text,
+        "fetched_at": analysis.fetched_at,
+    }

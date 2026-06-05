@@ -12,3 +12,8 @@ httpx==0.27.2
 requests==2.32.3
 pytest==8.3.3
 pytest-mock==3.14.0
+# Production additions
+supabase==2.9.1
+PyJWT==2.9.0
+google-generativeai==0.8.3
+slowapi==0.1.9

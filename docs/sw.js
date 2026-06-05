@@ -2,7 +2,7 @@
 // My Stock Analyst — Service Worker
 // ══════════════════════════════════════════════════════
 
-const CACHE_NAME = 'msa-v5';
+const CACHE_NAME = 'msa-v6';
 const QUEUE_STORE = 'offline-queue';
 const DB_NAME = 'msa-sw-db';
 const DB_VERSION = 1;

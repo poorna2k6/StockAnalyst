@@ -212,6 +212,15 @@
     body.dark input,body.dark select,body.dark textarea{background:#1e293b;border-color:#334155;color:#f1f5f9}
     body.dark input:focus,body.dark select:focus,body.dark textarea:focus{background:#1e293b;border-color:#3b82f6}
     body.dark .chat-msg-ai{background:#1e293b;color:#f1f5f9}
+    /* Chat tab enterprise styles */
+    .sc-quick-card{background:#fff;border-radius:16px;padding:14px;cursor:pointer;border:1.5px solid #f1f5f9;transition:border-color .15s,box-shadow .15s;text-align:left;width:100%}
+    .sc-quick-card:hover{border-color:#6366f1;box-shadow:0 4px 16px rgba(99,102,241,.12)}
+    .sc-pulse-chip{flex:1;text-align:center;padding:4px 0}
+    .sc-interest-chip{display:inline-flex;align-items:center;gap:4px;background:#f0f4ff;border:1px solid #c7d2fe;border-radius:20px;padding:4px 10px;font-size:11px;color:#4338ca;cursor:pointer;font-weight:600}
+    .sc-interest-chip:hover{background:#e0e7ff}
+    body.dark .sc-quick-card{background:#1e293b;border-color:#334155;color:#f1f5f9}
+    body.dark .sc-quick-card:hover{border-color:#6366f1}
+    body.dark .sc-interest-chip{background:#1e3a5f;border-color:#3730a3;color:#a5b4fc}
     body.dark .metric-row{border-bottom-color:#334155}
     body.dark .pill-gr{background:#334155;color:#94a3b8}
     body.dark .pill-g{background:#14532d;color:#86efac}
@@ -272,11 +281,9 @@
   </div>
   <div class="max-w-lg mx-auto flex border-t border-gray-100">
     <button class="tab-btn tab-active" onclick="switchTab('brief',this)">📰 Brief</button>
-    <button class="tab-btn" onclick="switchTab('invest',this)">💡 Invest</button>
-    <button class="tab-btn" onclick="switchTab('analyst',this)">🤖 Analyst</button>
     <button class="tab-btn" onclick="switchTab('portfolio',this)">📊 Portfolio</button>
     <button class="tab-btn" onclick="switchTab('watch',this)">⭐ Watch</button>
-    <button class="tab-btn" onclick="switchTab('earn',this)">💰 Earn</button>
+    <button class="tab-btn" onclick="switchTab('stockchat',this)">💬 Chat</button>
   </div>
 </div>
 
@@ -351,96 +358,74 @@
   <!-- ══════════════════════════════════════
        TAB 2: INVEST
   ══════════════════════════════════════ -->
-  <div id="tab-invest" class="tab-pane space-y-4">
-
-    <div class="card p-4">
-      <div class="section-label">Investment Planner</div>
-      <p class="text-sm text-gray-500 mb-3">Tell me your budget and goals. I'll split it across the best stocks for you with specific entry prices, profit targets, and exit strategies.</p>
-    <div class="text-xs text-amber-700 bg-amber-50 rounded-xl px-3 py-2 border border-amber-100 mb-3" role="note">
-      ⚠️ <strong>Educational use only.</strong> This is not financial advice. All suggestions are AI-generated estimates. Always do your own research and consult a licensed financial advisor before investing real money.
-    </div>
-      <div class="space-y-3">
-        <div>
-          <label class="text-xs font-semibold text-gray-500 mb-1 block">Your Investment Budget (USD)</label>
-          <div class="relative">
-            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
-            <input id="invest-budget" type="number" placeholder="e.g. 1000" min="50" style="padding-left:28px" />
-          </div>
-        </div>
-        <div>
-          <label class="text-xs font-semibold text-gray-500 mb-1 block">Risk Level</label>
-          <select id="invest-risk">
-            <option value="beginner">Beginner — Safe, ETFs + Blue Chips (Low Risk)</option>
-            <option value="moderate">Moderate — Mix of Growth + Stable Stocks</option>
-            <option value="aggressive">Aggressive — High Growth, High Risk Stocks</option>
-          </select>
-        </div>
-        <div>
-          <label class="text-xs font-semibold text-gray-500 mb-1 block">Investment Horizon</label>
-          <select id="invest-horizon">
-            <option value="short">Short-term (1–3 months) — Quick gains, active management</option>
-            <option value="medium">Medium-term (3–12 months) — Balance of growth and safety</option>
-            <option value="long">Long-term (1–5 years) — Buy and hold, compound growth</option>
-          </select>
-        </div>
-        <div>
-          <label class="text-xs font-semibold text-gray-500 mb-1 block">Anything specific? (optional)</label>
-          <input id="invest-goal" type="text" placeholder="e.g. I'm interested in AI stocks, or I want dividend income" />
-        </div>
-        <button class="btn btn-primary" onclick="handleInvestmentPlan()">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.347.347a3.75 3.75 0 01-5.303 0l-.347-.347z"/></svg>
-          Build My Investment Plan
-        </button>
-      </div>
-    </div>
-
-    <div id="invest-result" class="space-y-4"></div>
-  </div>
-
   <!-- ══════════════════════════════════════
-       TAB 3: ANALYST CHAT
+       CHAT TAB — General-purpose investment chatbot with live data
   ══════════════════════════════════════ -->
-  <div id="tab-analyst" class="tab-pane space-y-3">
+  <div id="tab-stockchat" class="tab-pane space-y-3">
 
+    <!-- Market Pulse Bar -->
     <div class="card p-3">
-      <p class="text-xs text-gray-400 text-center">Ask me anything: <span class="text-blue-500 font-semibold">Analyze AAPL</span> · <span class="text-blue-500 font-semibold">Compare NVDA vs AMD</span> · <span class="text-blue-500 font-semibold">Is TSLA a buy?</span></p>
-      <div class="flex gap-2 mt-2 flex-wrap justify-center">
-        <button onclick="quickAsk('Analyze NVDA for me')" class="pill pill-b cursor-pointer">NVDA</button>
-        <button onclick="quickAsk('Should I buy AAPL right now?')" class="pill pill-b cursor-pointer">AAPL</button>
-        <button onclick="quickAsk('Is TSLA worth buying?')" class="pill pill-b cursor-pointer">TSLA</button>
-        <button onclick="quickAsk('Give me a safe ETF to invest in')" class="pill pill-b cursor-pointer">ETF Pick</button>
-        <button onclick="quickAsk('What stocks are good for side income today?')" class="pill pill-b cursor-pointer">Side Income</button>
+      <div class="flex justify-between items-center mb-2">
+        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Market Pulse</span>
+        <button onclick="refreshPulse()" title="Refresh" style="background:none;border:none;cursor:pointer;font-size:16px;color:#94a3b8;line-height:1">↻</button>
+      </div>
+      <div class="flex justify-around text-center gap-1" id="sc-pulse-inner">
+        <div class="flex-1"><div class="text-xs text-gray-400">SPY</div><div class="font-mono font-bold text-sm" id="sc-spy-p">—</div><div class="text-xs" id="sc-spy-c">—</div></div>
+        <div class="flex-1"><div class="text-xs text-gray-400">QQQ</div><div class="font-mono font-bold text-sm" id="sc-qqq-p">—</div><div class="text-xs" id="sc-qqq-c">—</div></div>
+        <div class="flex-1"><div class="text-xs text-gray-400">IWM</div><div class="font-mono font-bold text-sm" id="sc-iwm-p">—</div><div class="text-xs" id="sc-iwm-c">—</div></div>
+        <div class="flex-1"><div class="text-xs text-gray-400">DIA</div><div class="font-mono font-bold text-sm" id="sc-dia-p">—</div><div class="text-xs" id="sc-dia-c">—</div></div>
       </div>
     </div>
 
-    <div id="chat-messages" class="space-y-3 min-h-48">
-      <div class="chat-msg-ai">
-        Hi! I'm your personal stock analyst. I use real market data and AI to help you make smarter investment decisions.<br><br>
-        Ask me to analyze any stock, compare options, or get investment ideas. I'll explain everything in simple terms — no finance jargon!<br><br>
-        <em class="text-gray-500 text-xs">Type below or tap a quick button above.</em>
-        <div class="flex flex-wrap gap-2 mt-3">
-          <button class="pill pill-bl" onclick="quickAsk('Is AAPL a buy right now?')">Is AAPL a buy?</button>
-          <button class="pill pill-bl" onclick="quickAsk('Analyze NVDA — is it overvalued?')">Analyze NVDA</button>
-          <button class="pill pill-bl" onclick="quickAsk('What is a P/E ratio and why does it matter?')">What is P/E ratio?</button>
-        </div>
-      </div>
+    <!-- Quick-start cards -->
+    <div class="grid grid-cols-2 gap-2">
+      <button onclick="scQuickAsk('What are the top 5 stocks to buy today based on momentum and fundamentals?')" class="sc-quick-card">
+        <div style="font-size:1.4rem;margin-bottom:6px">📈</div>
+        <div class="text-xs font-bold text-gray-800" style="letter-spacing:-.2px">Top 5 Today</div>
+        <div class="text-xs text-gray-400 mt-1">Live momentum picks</div>
+      </button>
+      <button onclick="scQuickAsk('What are the best ETFs and index funds for long-term investing right now? Include SPY, QQQ, VTI, SCHD.')" class="sc-quick-card">
+        <div style="font-size:1.4rem;margin-bottom:6px">🏦</div>
+        <div class="text-xs font-bold text-gray-800" style="letter-spacing:-.2px">Best ETFs</div>
+        <div class="text-xs text-gray-400 mt-1">Index &amp; passive funds</div>
+      </button>
+      <button onclick="scQuickAsk('Give me a full market overview — what are SPY, QQQ, IWM doing today and why?')" class="sc-quick-card">
+        <div style="font-size:1.4rem;margin-bottom:6px">🌍</div>
+        <div class="text-xs font-bold text-gray-800" style="letter-spacing:-.2px">Market Pulse</div>
+        <div class="text-xs text-gray-400 mt-1">What&apos;s moving today</div>
+      </button>
+      <button onclick="scQuickAsk('What are the best stocks to hold for 5+ years for long-term wealth building?')" class="sc-quick-card">
+        <div style="font-size:1.4rem;margin-bottom:6px">⏳</div>
+        <div class="text-xs font-bold text-gray-800" style="letter-spacing:-.2px">Long-Term Picks</div>
+        <div class="text-xs text-gray-400 mt-1">5+ year wealth builders</div>
+      </button>
     </div>
 
+    <!-- Your Interests (auto-populated from chat history) -->
+    <div id="sc-interests" style="display:none">
+      <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Your Interests</div>
+      <div id="sc-interest-chips" class="flex flex-wrap gap-2"></div>
+    </div>
+
+    <!-- Messages -->
+    <div id="sc-messages" class="space-y-3 min-h-48"></div>
+
+    <!-- Input bar -->
     <div class="card p-3 sticky bottom-20 z-10">
       <div class="flex gap-2">
-        <input id="chat-input" type="text" placeholder="Ask about any stock or market..." class="flex-1" style="border-radius:20px;padding:10px 16px" autocorrect="off" autocomplete="off" spellcheck="false" />
-        <button onclick="handleChat()" class="w-11 h-11 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+        <input id="sc-input" type="text" placeholder="Ask anything — stocks, ETFs, indexes, strategy…" class="flex-1" style="border-radius:20px;padding:10px 16px" autocorrect="off" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')handleStockChat()" />
+        <button onclick="handleStockChat()" class="w-11 h-11 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
           <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14M12 5l7 7-7 7"/></svg>
         </button>
       </div>
       <div class="flex justify-end mt-1">
-        <button onclick="clearChatHistory()" class="text-xs text-gray-400 hover:text-red-400 cursor-pointer" style="background:none;border:none;padding:2px 4px">🗑 Clear Chat</button>
+        <button onclick="clearStockChat()" class="text-xs text-gray-400 hover:text-red-400 cursor-pointer" style="background:none;border:none;padding:2px 4px">🗑 Clear Chat</button>
       </div>
     </div>
   </div>
 
   <!-- ══════════════════════════════════════
-       TAB 4: PORTFOLIO
+       TAB 3: PORTFOLIO
   ══════════════════════════════════════ -->
   <div id="tab-portfolio" class="tab-pane space-y-4">
 
@@ -526,65 +511,6 @@
         <div class="font-semibold text-gray-600">No stocks watched yet</div>
         <div class="text-sm text-gray-400 mt-1">Tap the ☆ star icon on any stock in Brief or Analyst to add it here</div>
       </div>
-    </div>
-  </div>
-
-  <!-- EARN TAB -->
-  <div id="tab-earn" class="tab-pane space-y-4">
-
-  <div class="card p-4">
-    <div class="section-label">Stock Trading Income</div>
-    <p class="text-sm text-gray-500 mb-3">AI picks specific stocks and trading strategies to earn from the market — tailored to your style and portfolio.</p>
-    <div class="space-y-3">
-      <div>
-        <label class="text-xs font-semibold text-gray-500 block mb-1">Trading style</label>
-        <select id="earn-goal">
-          <option value="dividend">Dividend income — earn quarterly payouts</option>
-          <option value="swing">Swing trading — hold days to weeks for gains</option>
-          <option value="options">Options income — covered calls &amp; cash-secured puts</option>
-          <option value="growth">Growth investing — long-term high-return stocks</option>
-          <option value="momentum">Momentum trades — ride trending stocks now</option>
-        </select>
-      </div>
-      <div>
-        <label class="text-xs font-semibold text-gray-500 block mb-1">Risk tolerance</label>
-        <select id="earn-risk">
-          <option value="low">Low — preserve capital, steady income</option>
-          <option value="medium">Medium — balanced growth and income</option>
-          <option value="high">High — maximize gains, accept volatility</option>
-        </select>
-      </div>
-      <div>
-        <label class="text-xs font-semibold text-gray-500 block mb-1">Approx. cash available to invest (optional)</label>
-        <input id="earn-capital" type="text" placeholder="e.g. $500, $2000, $10,000…" inputmode="decimal" />
-      </div>
-      <button class="btn btn-primary" onclick="getIncomeIdeas()">Get Stock Ideas</button>
-    </div>
-  </div>
-
-  <div id="earn-result"></div>
-
-  <div id="earn-tips" class="space-y-3">
-    <div class="section-label">Strategies At a Glance</div>
-    <div class="card p-4">
-      <div class="font-semibold text-gray-800 text-sm mb-1">Dividend Income</div>
-      <div class="text-xs text-gray-500">SCHD, VYM, JEPI, O, REALTY — pay you every quarter just for holding. Yield 3-8% annually with little effort.</div>
-    </div>
-    <div class="card p-4">
-      <div class="font-semibold text-gray-800 text-sm mb-1">Covered Calls</div>
-      <div class="text-xs text-gray-500">Own 100+ shares? Sell monthly call options and collect premium — earn 1-3% extra per month on holdings like AAPL, TSLA, MSFT.</div>
-    </div>
-    <div class="card p-4">
-      <div class="font-semibold text-gray-800 text-sm mb-1">Swing Trading</div>
-      <div class="text-xs text-gray-500">Buy oversold stocks near support, sell at resistance in 3-14 days. Target 3-8% per trade. Works well with earnings catalysts.</div>
-    </div>
-    <div class="card p-4">
-      <div class="font-semibold text-gray-800 text-sm mb-1">Cash-Secured Puts</div>
-      <div class="text-xs text-gray-500">Sell put options on stocks you'd want to buy. Collect premium upfront. If assigned, you buy shares at a discount.</div>
-    </div>
-    <div class="card p-4">
-      <div class="font-semibold text-gray-800 text-sm mb-1">T-Bills &amp; Money Market</div>
-      <div class="text-xs text-gray-500">Park idle cash in SGOV or BIL — earning ~4-5% APY risk-free while you wait for the right trade.</div>
     </div>
   </div>
 
@@ -902,7 +828,7 @@ let watchlist = safeJsonParse('msa_watchlist', []);
 let alerts   = safeJsonParse('msa_alerts',    {});
 let _darkMode = localStorage.getItem('msa_dark') === '1';
 
-const BUILD = { version: 'v3.0.0', deployedAt: '2026-06-05 03:19 UTC', commit: '84b2163' };
+const BUILD = { version: 'v3.1.0', deployedAt: '2026-06-05 04:26 UTC', commit: 'f6fceca' };
 document.addEventListener('DOMContentLoaded', () => {
   const el = document.getElementById('header-build');
   if(el) el.textContent = BUILD.version + ' · ' + BUILD.deployedAt;
@@ -1210,9 +1136,13 @@ function switchTab(name, btn){
   if(name==='brief' && !_briefAnalyzing && Date.now()-_briefLastFetch > STALE_MS) refreshBrief();
   if(name==='watch'){
     renderWatchlist();
-    // Fetch any missing quotes
     const missing = watchlist.filter(t=>!quotes[t]);
     if(missing.length) Promise.all(missing.map(t=>fetchQuote(t).then(q=>{if(q)cacheQuote(t,q);}))).then(()=>renderWatchlist()).catch(()=>renderWatchlist());
+  }
+  if(name==='stockchat'){
+    refreshPulse();
+    renderInterests();
+    if(!document.getElementById('sc-messages').children.length) renderStockChatWelcome();
   }
 }
 function goToTab(name){
@@ -2378,6 +2308,197 @@ function clearChatHistory() {
   document.getElementById('chat-messages').innerHTML = '';
   renderChatWelcome();
   toast('Chat cleared');
+}
+
+// ══════════════════════════════════════════════════════
+// STOCK CHAT TAB — general-purpose investment chatbot
+// ══════════════════════════════════════════════════════
+let scChatHistory = (()=>{ try{ return JSON.parse(localStorage.getItem('msa_sc_history')||'[]').slice(-20); }catch{ return []; } })();
+let _scBusy = false;
+let _pulseInterval = null;
+
+const ETF_UNIVERSE = ['SPY','QQQ','VTI','SCHD','IWM','GLD','XLK','JEPI','VNQ','TLT','BIL','SGOV'];
+
+async function refreshPulse() {
+  const tickers = ['SPY','QQQ','IWM','DIA'];
+  const ids = { SPY:['sc-spy-p','sc-spy-c'], QQQ:['sc-qqq-p','sc-qqq-c'], IWM:['sc-iwm-p','sc-iwm-c'], DIA:['sc-dia-p','sc-dia-c'] };
+  const quotes = await Promise.all(tickers.map(t=>fetchQuote(t)));
+  tickers.forEach((t,i)=>{
+    const q=quotes[i]; if(!q) return;
+    const [pid,cid]=ids[t];
+    const pe=document.getElementById(pid), ce=document.getElementById(cid);
+    if(pe) pe.textContent='$'+q.price.toFixed(2);
+    if(ce){ const up=q.changePct>=0; ce.textContent=(up?'▲':'▼')+Math.abs(q.changePct).toFixed(2)+'%'; ce.style.color=up?'#16a34a':'#dc2626'; }
+  });
+}
+
+function renderStockChatWelcome() {
+  const el = document.getElementById('sc-messages');
+  if(!el) return;
+  el.innerHTML = `<div class="chat-msg-ai">
+    <div style="font-size:1.5rem;margin-bottom:8px">👋</div>
+    <strong>Hi! I'm your AI Investment Analyst.</strong><br><br>
+    I fetch <strong>live market data</strong> before every answer — prices, fundamentals, analyst ratings — so nothing I say is made up.<br><br>
+    Try asking me:<br>
+    <div class="flex flex-wrap gap-2 mt-3">
+      <button class="pill pill-bl" onclick="scQuickAsk('What are the top 5 stocks to buy today?')">Top 5 today</button>
+      <button class="pill pill-bl" onclick="scQuickAsk('Best ETFs for retirement investing?')">Best ETFs</button>
+      <button class="pill pill-bl" onclick="scQuickAsk('Compare AAPL vs MSFT right now')">AAPL vs MSFT</button>
+      <button class="pill pill-bl" onclick="scQuickAsk('Is NVDA overvalued at current price?')">Is NVDA overvalued?</button>
+    </div>
+  </div>`;
+}
+
+function scQuickAsk(msg) {
+  const input = document.getElementById('sc-input');
+  if(input){ input.value = msg; handleStockChat(); }
+}
+
+function clearStockChat() {
+  if(!confirm('Clear chat history?')) return;
+  scChatHistory = [];
+  try{ localStorage.removeItem('msa_sc_history'); }catch{}
+  document.getElementById('sc-messages').innerHTML='';
+  renderStockChatWelcome();
+  toast('Chat cleared');
+}
+
+// Self-learning: track user interest (tickers + topics) from chat history
+let _scInterests = (()=>{ try{ return JSON.parse(localStorage.getItem('msa_sc_interests')||'{}'); }catch{ return {}; } })();
+
+function scTrackInterest(tickers, upper) {
+  tickers.forEach(t=>{ _scInterests[t]=(_scInterests[t]||0)+2; });
+  if(/\b(ETF|INDEX|FUND|PASSIVE)\b/.test(upper)) _scInterests['__etf']=(_scInterests['__etf']||0)+1;
+  if(/\b(LONG.?TERM|RETIREMENT|WEALTH)\b/.test(upper)) _scInterests['__longterm']=(_scInterests['__longterm']||0)+1;
+  if(/\b(TOP|BEST|PICK|TODAY)\b/.test(upper)) _scInterests['__top']=(_scInterests['__top']||0)+1;
+  try{ localStorage.setItem('msa_sc_interests',JSON.stringify(_scInterests)); }catch{}
+  renderInterests();
+}
+
+function renderInterests() {
+  const box=document.getElementById('sc-interests');
+  const chips=document.getElementById('sc-interest-chips');
+  if(!box||!chips) return;
+  const entries=Object.entries(_scInterests).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  if(entries.length<2){ box.style.display='none'; return; }
+  box.style.display='';
+  chips.innerHTML=entries.map(([k])=>{
+    if(k==='__etf') return `<button class="sc-interest-chip" onclick="scQuickAsk('Best ETFs right now?')">🏦 ETFs</button>`;
+    if(k==='__longterm') return `<button class="sc-interest-chip" onclick="scQuickAsk('Best long-term stocks to hold?')">⏳ Long-term</button>`;
+    if(k==='__top') return `<button class="sc-interest-chip" onclick="scQuickAsk('Top 5 stocks to buy today?')">📈 Top picks</button>`;
+    return `<button class="sc-interest-chip" onclick="scQuickAsk('Analyze ${k} — is it a good buy right now?')">${k}</button>`;
+  }).join('');
+}
+
+let _scPulseTs = 0;
+async function handleStockChat() {
+  if(_scBusy) return;
+  const input = document.getElementById('sc-input');
+  const msg = input.value.trim(); if(!msg) return;
+  input.value='';
+  const sendBtn = input.nextElementSibling;
+  _scBusy=true; input.disabled=true; sendBtn.disabled=true; sendBtn.style.opacity='0.5';
+
+  const msgsEl = document.getElementById('sc-messages');
+  const userDiv = document.createElement('div');
+  userDiv.className='chat-msg-user'; userDiv.textContent=msg;
+  msgsEl.appendChild(userDiv); msgsEl.scrollTop=msgsEl.scrollHeight;
+
+  scChatHistory.push({role:'user',content:msg});
+  scChatHistory=scChatHistory.slice(-20);
+  try{ localStorage.setItem('msa_sc_history',JSON.stringify(scChatHistory)); }catch{}
+
+  const loadEl=document.createElement('div');
+  loadEl.className='chat-msg-ai';
+  loadEl.innerHTML='<span class="spin"></span> <span class="text-gray-400 text-sm">Fetching live market data…</span>';
+  msgsEl.appendChild(loadEl); msgsEl.scrollTop=msgsEl.scrollHeight;
+
+  // Smart intent detection
+  const upper=msg.toUpperCase();
+  const explicitTickers=extractTickers(upper);
+  const wantsTop=/\b(TOP|BEST|PICK|RECOMMEND|BUY NOW|INVEST NOW)\b/.test(upper)&&explicitTickers.length===0;
+  const wantsETF=/\b(ETF|INDEX FUND|FUND|PASSIVE|VANGUARD|ISHARES|SCHD|VTI|JEPI)\b/.test(upper);
+  const wantsMarket=/\b(MARKET|OVERVIEW|TODAY|S&P|DOW|NASDAQ|MACRO|ECONOMY|SECTOR)\b/.test(upper)&&explicitTickers.length===0;
+  const wantsLong=/\b(LONG.?TERM|5 YEAR|10 YEAR|DECADE|HOLD|RETIRE|RETIREMENT|WEALTH|FOREVER)\b/.test(upper);
+
+  scTrackInterest(explicitTickers, upper);
+
+  let fetchTickers=[...explicitTickers];
+  if(wantsETF) fetchTickers=[...new Set([...fetchTickers,...ETF_UNIVERSE])];
+  if(wantsTop||wantsLong) fetchTickers=[...new Set([...fetchTickers,...PICKS_POOL.slice(0,18)])];
+  if(wantsMarket) fetchTickers=[...new Set([...fetchTickers,'SPY','QQQ','IWM','DIA'])];
+  if(!fetchTickers.length) fetchTickers=['SPY','QQQ','IWM'];
+
+  loadEl.innerHTML=`<span class="spin"></span> <span class="text-gray-400 text-sm">Fetching ${fetchTickers.slice(0,6).join(', ')}${fetchTickers.length>6?' + more':''}…</span>`;
+
+  const needFundamentals = wantsTop||wantsLong||wantsETF||explicitTickers.length>0;
+  const fundsLimit = Math.min(fetchTickers.length, 12);
+  const [quotesArr, fundsArr] = await Promise.all([
+    Promise.all(fetchTickers.map(t=>fetchQuote(t))),
+    needFundamentals ? Promise.all(fetchTickers.slice(0,fundsLimit).map(t=>fetchFundamentals(t))) : Promise.resolve([]),
+  ]);
+
+  const contextLines = fetchTickers.map((t,i)=>{
+    const q=quotesArr[i]; if(!q) return `${t}: data unavailable`;
+    const f=fundsArr[i];
+    const pos52=q.hi52&&q.lo52?((q.price-q.lo52)/(q.hi52-q.lo52)*100).toFixed(0)+'%':'–';
+    let lines=[`${t} (${q.name}): $${q.price?.toFixed(2)} | Day: ${q.changePct?.toFixed(2)}% | 52W position: ${pos52} | MarketCap: ${fmtB(q.marketCap)}`];
+    if(f){
+      if(f.trailingPE) lines.push(`  P/E: ${f.trailingPE.toFixed(1)}x | ROE: ${f.roe?(f.roe*100).toFixed(1)+'%':'–'} | Net Margin: ${f.profitMargin?(f.profitMargin*100).toFixed(1)+'%':'–'} | Rev Growth: ${f.revenueGrowth?(f.revenueGrowth*100).toFixed(1)+'%':'–'}`);
+      if(f.targetMean&&q.price) lines.push(`  Analyst: $${f.targetMean.toFixed(2)} target (${(((f.targetMean/q.price)-1)*100).toFixed(1)}% upside) | ${f.buyCount} Buy / ${f.holdCount} Hold / ${f.sellCount} Sell`);
+    }
+    return lines.join('\n');
+  }).join('\n');
+
+  if(!getActiveAI()){
+    loadEl.className='chat-msg-ai';
+    loadEl.innerHTML='⚙️ Add a Claude or Gemini API key in <strong>Settings</strong> (gear icon) to get AI analysis.';
+    _scBusy=false; input.disabled=false; sendBtn.disabled=false; sendBtn.style.opacity='1'; return;
+  }
+
+  loadEl.innerHTML='<span class="spin"></span> <span class="text-gray-400 text-sm">Analyzing with AI…</span>';
+
+  const systemPrompt=`You are an expert investment analyst. You have access to live market data fetched right now from Yahoo Finance.
+
+STRICT RULES:
+1. Only use numbers from the LIVE MARKET DATA block. Never invent prices, ratios, or returns.
+2. When ranking (top 5, best, etc.): score by day momentum + 52W position + analyst buy% + fundamentals.
+3. Always mention the live price and day % change for every stock you discuss.
+4. For ETFs: mention the index tracked, diversification, and current trend.
+5. Be direct, clear, and actionable. No jargon — explain everything simply.
+6. End every response with: ⚠️ Educational analysis only — not financial advice.`;
+
+  const messages=[...scChatHistory.slice(-10)];
+  const last=messages.length-1;
+  if(last>=0&&messages[last].role==='user'){
+    messages[last]={role:'user',content:messages[last].content+'\n\nLIVE MARKET DATA (just fetched):\n'+contextLines};
+  }
+
+  try{
+    loadEl.className='chat-msg-ai streaming'; loadEl.textContent='';
+    const handler=createStreamHandler(loadEl);
+    await streamAI(systemPrompt,messages,3000,chunk=>{ handler.onChunk(chunk); msgsEl.scrollTop=msgsEl.scrollHeight; });
+    handler.cancel();
+    const text=handler.getText();
+    loadEl.classList.remove('streaming');
+    loadEl.innerHTML=renderMarkdown(text);
+    addCopyBtn(loadEl);
+    scChatHistory.push({role:'assistant',content:text});
+    scChatHistory=scChatHistory.slice(-20);
+    try{ localStorage.setItem('msa_sc_history',JSON.stringify(scChatHistory)); }catch{}
+    if(explicitTickers.length){
+      const starRow=document.createElement('div');
+      starRow.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-top:4px';
+      explicitTickers.forEach(t=>{ const btn=document.createElement('button');btn.style.cssText=`background:none;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-size:12px;padding:3px 8px;color:${watchlist.includes(t)?'#f59e0b':'#94a3b8'};display:inline-flex;align-items:center;gap:3px`;btn.innerHTML=`${watchlist.includes(t)?'★':'☆'} ${esc(t)}`;btn.onclick=()=>{toggleWatchlist(t);btn.style.color=watchlist.includes(t)?'#f59e0b':'#94a3b8';btn.innerHTML=`${watchlist.includes(t)?'★':'☆'} ${esc(t)}`;};starRow.appendChild(btn); });
+      msgsEl.appendChild(starRow);
+    }
+  }catch(err){
+    if(err?.name==='AbortError'){ loadEl.classList.remove('streaming'); loadEl.innerHTML+='<em class="text-gray-400 text-xs"> [cancelled]</em>'; }
+    else{ loadEl.className='chat-msg-ai'; loadEl.textContent=getErrorMsg('ai',err?.message); }
+  }finally{
+    _scBusy=false; input.disabled=false; sendBtn.disabled=false; sendBtn.style.opacity='1';
+    msgsEl.scrollTop=msgsEl.scrollHeight;
+  }
 }
 
 // UX-10: Basic markdown rendering applied after streaming completes

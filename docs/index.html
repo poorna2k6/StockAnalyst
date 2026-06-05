@@ -828,7 +828,7 @@ let watchlist = safeJsonParse('msa_watchlist', []);
 let alerts   = safeJsonParse('msa_alerts',    {});
 let _darkMode = localStorage.getItem('msa_dark') === '1';
 
-const BUILD = { version: 'v3.1.0', deployedAt: '2026-06-05 04:26 UTC', commit: 'f6fceca' };
+const BUILD = { version: 'v3.1.0', deployedAt: '2026-06-05 07:48 UTC', commit: 'b6ea5ce' };
 document.addEventListener('DOMContentLoaded', () => {
   const el = document.getElementById('header-build');
   if(el) el.textContent = BUILD.version + ' · ' + BUILD.deployedAt;

@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>StockAI — Screen Designs Preview</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: { navy: '#0a0f1e', card: '#111827' },
+      fontFamily: { sans: ['Inter', 'sans-serif'] }
+    }
+  }
+}
+</script>
+<style>
+  body { background: #0a0f1e; font-family: 'Inter', sans-serif; }
+  .gradient-text { background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .gradient-btn { background: linear-gradient(135deg, #3b82f6, #7c3aed); }
+  .screen { display: none; }
+  .screen.active { display: flex; }
+  .nav-btn.active { background: rgba(255,255,255,0.1); color: white; }
+  ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #374151; border-radius: 2px; }
+  .pulse-ring { animation: pulse-ring 2s ease-in-out infinite; }
+  @keyframes pulse-ring { 0%,100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.4); } 50% { box-shadow: 0 0 0 8px rgba(59,130,246,0); } }
+  .slide-in { animation: slideIn 0.3s ease-out; }
+  @keyframes slideIn { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+  .gauge-fill { stroke-dasharray: 251; stroke-dashoffset: 88; stroke-linecap: round; transition: stroke-dashoffset 1s ease; }
+</style>
+</head>
+<body class="min-h-screen text-white">
+
+<!-- TOP NAV -->
+<div class="fixed top-0 inset-x-0 z-50 bg-navy/90 backdrop-blur border-b border-white/5 px-6 py-3 flex items-center justify-between">
+  <div class="flex items-center gap-3">
+    <div class="w-8 h-8 rounded-xl gradient-btn flex items-center justify-center text-sm">📈</div>
+    <span class="font-bold gradient-text">StockAI — Design Preview</span>
+    <span class="text-xs text-slate-600 hidden sm:block">Click screens below to navigate</span>
+  </div>
+  <div class="flex items-center gap-1 flex-wrap justify-end">
+    <button onclick="show('onboarding-welcome')" class="nav-btn text-xs px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all" id="btn-onboarding-welcome">1. Welcome</button>
+    <button onclick="show('onboarding-quiz')" class="nav-btn text-xs px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all" id="btn-onboarding-quiz">2. Profile Quiz</button>
+    <button onclick="show('broker-hub')" class="nav-btn text-xs px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all" id="btn-broker-hub">3. Broker Hub</button>
+    <button onclick="show('import-progress')" class="nav-btn text-xs px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all" id="btn-import-progress">4. Import</button>
+    <button onclick="show('dashboard')" class="nav-btn text-xs px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all" id="btn-dashboard">5. Dashboard</button>
+    <button onclick="show('portfolio')" class="nav-btn text-xs px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all" id="btn-portfolio">6. Portfolio</button>
+    <button onclick="show('chat')" class="nav-btn text-xs px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all" id="btn-chat">7. AI Chat</button>
+    <button onclick="show('alerts')" class="nav-btn text-xs px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all" id="btn-alerts">8. Alerts</button>
+  </div>
+</div>
+
+<div class="pt-16">
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SCREEN 1: ONBOARDING WELCOME -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="screen-onboarding-welcome" class="screen active min-h-screen flex items-center justify-center p-6">
+  <div class="slide-in w-full max-w-lg text-center">
+    <div class="w-20 h-20 rounded-3xl gradient-btn flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-blue-500/30 pulse-ring">
+      <span class="text-3xl">📈</span>
+    </div>
+    <h1 class="text-3xl font-bold text-white mb-3">Welcome to StockAI</h1>
+    <p class="text-slate-400 mb-8 max-w-sm mx-auto leading-relaxed">Let's personalise your AI advisor in 90 seconds. The more we know, the better the advice.</p>
+
+    <div class="grid grid-cols-3 gap-3 mb-8 text-sm">
+      <div class="bg-card border border-white/5 rounded-xl p-4">
+        <div class="text-2xl mb-2">🎯</div>
+        <div class="text-white font-medium mb-0.5">Your Goals</div>
+        <div class="text-slate-500 text-xs">Retirement, income, growth</div>
+      </div>
+      <div class="bg-card border border-white/5 rounded-xl p-4">
+        <div class="text-2xl mb-2">🔒</div>
+        <div class="text-white font-medium mb-0.5">Your Risk</div>
+        <div class="text-slate-500 text-xs">Conservative to aggressive</div>
+      </div>
+      <div class="bg-card border border-white/5 rounded-xl p-4">
+        <div class="text-2xl mb-2">🤖</div>
+        <div class="text-white font-medium mb-0.5">AI Calibration</div>
+        <div class="text-slate-500 text-xs">Tailored to you</div>
+      </div>
+    </div>
+
+    <div class="space-y-3">
+      <button onclick="show('onboarding-quiz')" class="w-full gradient-btn py-3.5 rounded-xl text-white font-semibold hover:opacity-90 transition-opacity">
+        Set up my profile <span class="ml-1">→</span>
+      </button>
+      <button onclick="show('broker-hub')" class="w-full py-3 rounded-xl border border-white/10 text-slate-400 hover:text-white text-sm transition-colors">
+        Skip for now — explore the app
+      </button>
+    </div>
+    <p class="text-slate-600 text-xs mt-4">You can update your profile anytime in Settings</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SCREEN 2: PROFILE QUIZ (6 steps) -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="screen-onboarding-quiz" class="screen min-h-screen flex items-center justify-center p-6">
+  <div class="slide-in w-full max-w-xl">
+    <!-- Progress bar -->
+    <div class="mb-8">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-sm text-slate-400">Step <span id="quiz-step-num">1</span> of 6</span>
+        <span class="text-sm text-slate-400" id="quiz-step-label">Primary Goal</span>
+      </div>
+      <div class="h-1.5 bg-white/5 rounded-full overflow-hidden">
+        <div id="quiz-progress" class="h-full gradient-btn rounded-full transition-all duration-500" style="width:16.6%"></div>
+      </div>
+    </div>
+
+    <!-- Step 1: Goal -->
+    <div id="quiz-1" class="quiz-step">
+      <h2 class="text-2xl font-bold text-white mb-2">What's your primary investment goal?</h2>
+      <p class="text-slate-500 text-sm mb-6">This shapes every recommendation the AI makes for you.</p>
+      <div class="grid grid-cols-2 gap-3">
+        <button onclick="selectGoal(this)" class="goal-btn bg-card border border-white/5 hover:border-blue-500/50 rounded-xl p-4 text-left transition-all">
+          <span class="text-2xl block mb-2">🏖️</span>
+          <div class="font-semibold text-white text-sm">Retirement</div>
+          <div class="text-slate-500 text-xs mt-0.5">Long-term wealth building</div>
+        </button>
+        <button onclick="selectGoal(this)" class="goal-btn bg-card border border-white/5 hover:border-blue-500/50 rounded-xl p-4 text-left transition-all">
+          <span class="text-2xl block mb-2">📈</span>
+          <div class="font-semibold text-white text-sm">Wealth Growth</div>
+          <div class="text-slate-500 text-xs mt-0.5">Maximise long-term returns</div>
+        </button>
+        <button onclick="selectGoal(this)" class="goal-btn bg-card border border-white/5 hover:border-blue-500/50 rounded-xl p-4 text-left transition-all">
+          <span class="text-2xl block mb-2">💰</span>
+          <div class="font-semibold text-white text-sm">Income Generation</div>
+          <div class="text-slate-500 text-xs mt-0.5">Dividends & steady cash flow</div>
+        </button>
+        <button onclick="selectGoal(this)" class="goal-btn bg-card border border-white/5 hover:border-blue-500/50 rounded-xl p-4 text-left transition-all">
+          <span class="text-2xl block mb-2">🛡️</span>
+          <div class="font-semibold text-white text-sm">Capital Preservation</div>
+          <div class="text-slate-500 text-xs mt-0.5">Protect what I have</div>
+        </button>
+        <button onclick="selectGoal(this)" class="goal-btn bg-card border border-white/5 hover:border-blue-500/50 rounded-xl p-4 text-left transition-all">
+          <span class="text-2xl block mb-2">🏠</span>
+          <div class="font-semibold text-white text-sm">Home Purchase</div>
+          <div class="text-slate-500 text-xs mt-0.5">Saving for a property</div>
+        </button>
+        <button onclick="selectGoal(this)" class="goal-btn bg-card border border-white/5 hover:border-blue-500/50 rounded-xl p-4 text-left transition-all">
+          <span class="text-2xl block mb-2">🎲</span>
+          <div class="font-semibold text-white text-sm">Active Trading</div>
+          <div class="text-slate-500 text-xs mt-0.5">Shorter-term opportunities</div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 2: Time horizon (shown via JS) -->
+    <div id="quiz-2" class="quiz-step hidden">
+      <h2 class="text-2xl font-bold text-white mb-2">How long do you plan to stay invested?</h2>
+      <p class="text-slate-500 text-sm mb-8">Your horizon determines how much short-term volatility you can absorb.</p>
+      <div class="space-y-3">
+        <button onclick="selectHorizon(this,'1-3 years','Short Term')" class="horizon-btn w-full flex items-center justify-between bg-card border border-white/5 hover:border-blue-500/50 rounded-xl px-5 py-4 transition-all">
+          <span class="font-medium text-white">1 – 3 years</span>
+          <span class="text-xs text-slate-500 bg-white/5 px-2 py-1 rounded-full">Short Term</span>
+        </button>
+        <button onclick="selectHorizon(this,'3-7 years','Medium Term')" class="horizon-btn w-full flex items-center justify-between bg-card border border-white/5 hover:border-blue-500/50 rounded-xl px-5 py-4 transition-all">
+          <span class="font-medium text-white">3 – 7 years</span>
+          <span class="text-xs text-slate-500 bg-white/5 px-2 py-1 rounded-full">Medium Term</span>
+        </button>
+        <button onclick="selectHorizon(this,'7-15 years','Long Term')" class="horizon-btn w-full flex items-center justify-between bg-card border border-white/5 hover:border-blue-500/50 rounded-xl px-5 py-4 transition-all">
+          <span class="font-medium text-white">7 – 15 years</span>
+          <span class="text-xs text-slate-500 bg-white/5 px-2 py-1 rounded-full">Long Term</span>
+        </button>
+        <button onclick="selectHorizon(this,'15+ years','Very Long Term')" class="horizon-btn w-full flex items-center justify-between bg-card border border-white/5 hover:border-blue-500/50 rounded-xl px-5 py-4 transition-all">
+          <span class="font-medium text-white">15+ years</span>
+          <span class="text-xs text-slate-500 bg-white/5 px-2 py-1 rounded-full">Very Long Term</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 3: Risk reaction -->
+    <div id="quiz-3" class="quiz-step hidden">
+      <h2 class="text-2xl font-bold text-white mb-2">Your portfolio drops 20% in a month.</h2>
+      <p class="text-slate-500 text-sm mb-8">Be honest — what would you actually do?</p>
+      <div class="space-y-3">
+        <button onclick="selectRisk(this,'conservative','Sell some to stop the bleeding')" class="risk-btn w-full flex items-center gap-4 bg-card border border-white/5 hover:border-rose-500/40 rounded-xl px-5 py-4 transition-all text-left">
+          <span class="text-2xl">😰</span>
+          <div><div class="font-medium text-white text-sm">Sell some to stop the bleeding</div><div class="text-slate-500 text-xs">Safety first</div></div>
+        </button>
+        <button onclick="selectRisk(this,'moderate','Hold and wait for recovery')" class="risk-btn w-full flex items-center gap-4 bg-card border border-white/5 hover:border-amber-500/40 rounded-xl px-5 py-4 transition-all text-left">
+          <span class="text-2xl">😐</span>
+          <div><div class="font-medium text-white text-sm">Hold and wait for recovery</div><div class="text-slate-500 text-xs">Stay the course</div></div>
+        </button>
+        <button onclick="selectRisk(this,'aggressive','Buy more — it's on sale')" class="risk-btn w-full flex items-center gap-4 bg-card border border-white/5 hover:border-emerald-500/40 rounded-xl px-5 py-4 transition-all text-left">
+          <span class="text-2xl">😎</span>
+          <div><div class="font-medium text-white text-sm">Buy more — it's on sale</div><div class="text-slate-500 text-xs">High risk tolerance</div></div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 4: Experience -->
+    <div id="quiz-4" class="quiz-step hidden">
+      <h2 class="text-2xl font-bold text-white mb-2">How would you describe your investing experience?</h2>
+      <p class="text-slate-500 text-sm mb-8">This helps the AI calibrate how technical to get.</p>
+      <div class="grid grid-cols-2 gap-3">
+        <button onclick="selectExp(this)" class="exp-btn bg-card border border-white/5 hover:border-blue-500/50 rounded-xl p-5 text-left transition-all">
+          <div class="text-2xl mb-2">🌱</div>
+          <div class="font-semibold text-white text-sm">Beginner</div>
+          <div class="text-slate-500 text-xs mt-1">New to investing, learning the basics</div>
+        </button>
+        <button onclick="selectExp(this)" class="exp-btn bg-card border border-white/5 hover:border-blue-500/50 rounded-xl p-5 text-left transition-all">
+          <div class="text-2xl mb-2">📊</div>
+          <div class="font-semibold text-white text-sm">Intermediate</div>
+          <div class="text-slate-500 text-xs mt-1">Comfortable with stocks & ETFs</div>
+        </button>
+        <button onclick="selectExp(this)" class="exp-btn bg-card border border-white/5 hover:border-blue-500/50 rounded-xl p-5 text-left transition-all">
+          <div class="text-2xl mb-2">🔬</div>
+          <div class="font-semibold text-white text-sm">Experienced</div>
+          <div class="text-slate-500 text-xs mt-1">Use technical analysis & options</div>
+        </button>
+        <button onclick="selectExp(this)" class="exp-btn bg-card border border-white/5 hover:border-blue-500/50 rounded-xl p-5 text-left transition-all">
+          <div class="text-2xl mb-2">🏦</div>
+          <div class="font-semibold text-white text-sm">Professional</div>
+          <div class="text-slate-500 text-xs mt-1">Finance background or CFA</div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 5: Tax sensitivity -->
+    <div id="quiz-5" class="quiz-step hidden">
+      <h2 class="text-2xl font-bold text-white mb-2">Do you want tax-aware recommendations?</h2>
+      <p class="text-slate-500 text-sm mb-8">The AI will flag tax-loss harvesting opportunities and suggest which accounts to sell from.</p>
+      <div class="space-y-3">
+        <button onclick="selectTax(this,true)" class="tax-btn w-full flex items-center gap-4 bg-card border border-white/5 hover:border-blue-500/50 rounded-xl px-5 py-4 transition-all text-left">
+          <span class="text-2xl">✅</span>
+          <div>
+            <div class="font-medium text-white text-sm">Yes — factor in my tax situation</div>
+            <div class="text-slate-500 text-xs">I have a taxable brokerage account</div>
+          </div>
+        </button>
+        <button onclick="selectTax(this,false)" class="tax-btn w-full flex items-center gap-4 bg-card border border-white/5 hover:border-blue-500/50 rounded-xl px-5 py-4 transition-all text-left">
+          <span class="text-2xl">❌</span>
+          <div>
+            <div class="font-medium text-white text-sm">No — keep it simple</div>
+            <div class="text-slate-500 text-xs">I invest only in tax-advantaged accounts (IRA/401k)</div>
+          </div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 6: Sectors to avoid -->
+    <div id="quiz-6" class="quiz-step hidden">
+      <h2 class="text-2xl font-bold text-white mb-2">Any sectors you prefer to avoid?</h2>
+      <p class="text-slate-500 text-sm mb-6">The AI will never recommend companies in selected categories.</p>
+      <div class="flex flex-wrap gap-2 mb-8">
+        <button onclick="toggleSector(this)" class="sector-chip px-4 py-2 rounded-full border border-white/10 text-slate-400 hover:text-white text-sm transition-all">🚬 Tobacco</button>
+        <button onclick="toggleSector(this)" class="sector-chip px-4 py-2 rounded-full border border-white/10 text-slate-400 hover:text-white text-sm transition-all">🛡️ Defense</button>
+        <button onclick="toggleSector(this)" class="sector-chip px-4 py-2 rounded-full border border-white/10 text-slate-400 hover:text-white text-sm transition-all">⛽ Fossil Fuels</button>
+        <button onclick="toggleSector(this)" class="sector-chip px-4 py-2 rounded-full border border-white/10 text-slate-400 hover:text-white text-sm transition-all">₿ Crypto</button>
+        <button onclick="toggleSector(this)" class="sector-chip px-4 py-2 rounded-full border border-white/10 text-slate-400 hover:text-white text-sm transition-all">🎰 Gambling</button>
+        <button onclick="toggleSector(this)" class="sector-chip px-4 py-2 rounded-full border border-white/10 text-slate-400 hover:text-white text-sm transition-all">🍺 Alcohol</button>
+        <button onclick="toggleSector(this, true)" class="sector-chip px-4 py-2 rounded-full border border-white/10 text-slate-400 hover:text-white text-sm transition-all">✓ None / No preference</button>
+      </div>
+      <button onclick="show('broker-hub')" class="w-full gradient-btn py-3.5 rounded-xl text-white font-semibold hover:opacity-90 transition-opacity">
+        Continue to connect broker →
+      </button>
+    </div>
+
+    <!-- Navigation -->
+    <div id="quiz-nav" class="flex justify-between mt-8">
+      <button id="quiz-back" onclick="quizPrev()" class="px-5 py-2.5 rounded-xl border border-white/10 text-slate-400 hover:text-white text-sm transition-colors hidden">← Back</button>
+      <div class="flex-1"></div>
+      <button id="quiz-next" onclick="quizNext()" class="gradient-btn px-6 py-2.5 rounded-xl text-white text-sm font-medium opacity-40 cursor-not-allowed" disabled>Continue →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SCREEN 3: BROKER HUB -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="screen-broker-hub" class="screen min-h-screen flex items-center justify-center p-6">
+  <div class="slide-in w-full max-w-2xl">
+    <div class="text-center mb-8">
+      <h2 class="text-2xl font-bold text-white mb-2">Connect your brokerage</h2>
+      <p class="text-slate-400 text-sm">Your credentials go directly to your broker — we never see them.</p>
+    </div>
+
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+      <!-- Robinhood -->
+      <button onclick="show('import-progress')" class="broker-card bg-card border border-white/5 hover:border-green-500/40 rounded-2xl p-5 flex flex-col items-center gap-3 transition-all group">
+        <div class="w-12 h-12 rounded-2xl bg-[#00C805]/10 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">🏹</div>
+        <div class="text-center">
+          <div class="font-semibold text-white text-sm">Robinhood</div>
+          <div class="text-xs text-emerald-400 mt-0.5">✓ OAuth</div>
+        </div>
+      </button>
+      <!-- Fidelity -->
+      <button onclick="show('import-progress')" class="broker-card bg-card border border-white/5 hover:border-green-500/40 rounded-2xl p-5 flex flex-col items-center gap-3 transition-all group">
+        <div class="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">🏛️</div>
+        <div class="text-center">
+          <div class="font-semibold text-white text-sm">Fidelity</div>
+          <div class="text-xs text-emerald-400 mt-0.5">✓ OAuth</div>
+        </div>
+      </button>
+      <!-- Schwab -->
+      <button onclick="show('import-progress')" class="broker-card bg-card border border-white/5 hover:border-green-500/40 rounded-2xl p-5 flex flex-col items-center gap-3 transition-all group">
+        <div class="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">🔵</div>
+        <div class="text-center">
+          <div class="font-semibold text-white text-sm">Schwab</div>
+          <div class="text-xs text-emerald-400 mt-0.5">✓ OAuth</div>
+        </div>
+      </button>
+      <!-- E*TRADE -->
+      <button onclick="show('import-progress')" class="broker-card bg-card border border-white/5 hover:border-green-500/40 rounded-2xl p-5 flex flex-col items-center gap-3 transition-all group">
+        <div class="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">⭐</div>
+        <div class="text-center">
+          <div class="font-semibold text-white text-sm">E*TRADE</div>
+          <div class="text-xs text-emerald-400 mt-0.5">✓ OAuth</div>
+        </div>
+      </button>
+      <!-- Webull -->
+      <button onclick="show('import-progress')" class="broker-card bg-card border border-white/5 hover:border-green-500/40 rounded-2xl p-5 flex flex-col items-center gap-3 transition-all group">
+        <div class="w-12 h-12 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">🐂</div>
+        <div class="text-center">
+          <div class="font-semibold text-white text-sm">Webull</div>
+          <div class="text-xs text-emerald-400 mt-0.5">✓ OAuth</div>
+        </div>
+      </button>
+      <!-- IBKR -->
+      <button onclick="show('import-progress')" class="broker-card bg-card border border-white/5 hover:border-green-500/40 rounded-2xl p-5 flex flex-col items-center gap-3 transition-all group">
+        <div class="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">🌐</div>
+        <div class="text-center">
+          <div class="font-semibold text-white text-sm">Interactive Brokers</div>
+          <div class="text-xs text-emerald-400 mt-0.5">✓ OAuth</div>
+        </div>
+      </button>
+    </div>
+
+    <!-- CSV fallback -->
+    <div class="bg-card border border-dashed border-white/10 rounded-2xl p-5 flex items-center gap-4 hover:border-white/20 transition-colors cursor-pointer" onclick="show('import-progress')">
+      <div class="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-xl shrink-0">📄</div>
+      <div>
+        <div class="font-medium text-white text-sm">Upload CSV</div>
+        <div class="text-slate-500 text-xs mt-0.5">Any broker — export your positions as CSV and upload. We'll auto-detect the format.</div>
+      </div>
+      <div class="ml-auto text-slate-600 text-sm shrink-0">→</div>
+    </div>
+
+    <p class="text-center text-slate-600 text-xs mt-5">
+      🔒 Secured by <span class="text-slate-500">SnapTrade</span> · SOC 2 Type II · Your credentials never reach our servers
+    </p>
+
+    <button onclick="show('dashboard')" class="block mx-auto mt-4 text-slate-500 hover:text-slate-400 text-sm transition-colors">Skip — I'll add manually</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SCREEN 4: IMPORT IN PROGRESS -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="screen-import-progress" class="screen min-h-screen flex items-center justify-center p-6">
+  <div class="slide-in w-full max-w-md text-center">
+    <div class="w-20 h-20 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-6">
+      <span class="text-3xl">🏹</span>
+    </div>
+    <h2 class="text-2xl font-bold text-white mb-2">Connecting Robinhood</h2>
+    <p class="text-slate-400 text-sm mb-8">We're importing your portfolio securely</p>
+
+    <!-- Steps -->
+    <div class="space-y-3 text-left mb-8">
+      <div class="flex items-center gap-3 bg-card border border-white/5 rounded-xl px-4 py-3">
+        <div class="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
+          <span class="text-emerald-400 text-xs">✓</span>
+        </div>
+        <span class="text-sm text-white">OAuth authorisation complete</span>
+      </div>
+      <div class="flex items-center gap-3 bg-card border border-white/5 rounded-xl px-4 py-3">
+        <div class="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
+          <span class="text-emerald-400 text-xs">✓</span>
+        </div>
+        <span class="text-sm text-white">Account verified (•••• 4821)</span>
+      </div>
+      <div class="flex items-center gap-3 bg-card border border-blue-500/20 rounded-xl px-4 py-3">
+        <div class="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0 animate-spin">
+          <span class="text-blue-400 text-xs">↻</span>
+        </div>
+        <span class="text-sm text-white">Fetching 14 positions…</span>
+      </div>
+      <div class="flex items-center gap-3 bg-card border border-white/5 rounded-xl px-4 py-3 opacity-40">
+        <div class="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center shrink-0">
+          <span class="text-slate-600 text-xs">4</span>
+        </div>
+        <span class="text-sm text-slate-500">Building your portfolio analysis</span>
+      </div>
+    </div>
+
+    <button onclick="show('dashboard')" class="w-full gradient-btn py-3.5 rounded-xl text-white font-semibold hover:opacity-90 transition-opacity">
+      View my portfolio →
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SCREEN 5: MAIN DASHBOARD (Brief tab) -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="screen-dashboard" class="screen min-h-screen">
+  <div class="flex h-screen">
+    <!-- Sidebar -->
+    <aside class="hidden md:flex flex-col w-56 border-r border-white/5 bg-card shrink-0">
+      <div class="flex items-center gap-2.5 px-5 py-5 border-b border-white/5">
+        <div class="w-8 h-8 rounded-xl gradient-btn flex items-center justify-center text-sm">📈</div>
+        <span class="font-bold gradient-text">StockAI</span>
+      </div>
+      <nav class="flex-1 px-3 py-4 space-y-1">
+        <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/10 text-white text-sm font-medium">📰 Brief</div>
+        <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 hover:text-white text-sm font-medium cursor-pointer" onclick="show('chat')">💬 Chat</div>
+        <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 hover:text-white text-sm font-medium cursor-pointer" onclick="show('portfolio')">💼 Portfolio</div>
+        <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 hover:text-white text-sm font-medium cursor-pointer">⭐ Watchlist</div>
+        <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 hover:text-white text-sm font-medium cursor-pointer">⚙️ Settings</div>
+      </nav>
+      <div class="px-3 pb-5">
+        <div class="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+          <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
+          <div class="flex-1 min-w-0">
+            <div class="text-xs text-white font-medium">Robinhood ✓</div>
+            <div class="text-xs text-slate-500">Synced 2m ago</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 overflow-y-auto p-6">
+      <!-- Personalised greeting -->
+      <div class="bg-gradient-to-r from-blue-500/10 to-purple-600/10 border border-blue-500/20 rounded-2xl p-5 mb-6">
+        <div class="flex items-start justify-between">
+          <div>
+            <p class="text-slate-400 text-xs mb-1">Good morning, Poorna</p>
+            <h2 class="text-white font-bold text-lg mb-2">Your AI Advisor's Daily Brief</h2>
+            <p class="text-slate-300 text-sm leading-relaxed max-w-xl">
+              Your portfolio is up <span class="text-emerald-400 font-semibold">+2.1%</span> today, led by NVDA (+4.3%) and AAPL (+1.1%).
+              However, your <span class="text-amber-400 font-semibold">Technology exposure is 61%</span> — above the 40% target for your
+              <span class="text-blue-300"> moderate risk profile</span>. Consider trimming NVDA which is also your most overweight position.
+            </p>
+          </div>
+          <div class="ml-4 shrink-0 text-right">
+            <div class="text-xs text-slate-500 mb-1">Health Score</div>
+            <div class="text-3xl font-bold text-amber-400">67</div>
+            <div class="text-xs text-slate-500">/100</div>
+          </div>
+        </div>
+        <div class="flex gap-2 mt-4">
+          <button onclick="show('chat')" class="text-xs gradient-btn px-3 py-1.5 rounded-lg text-white">Ask about this →</button>
+          <button onclick="show('portfolio')" class="text-xs bg-white/10 px-3 py-1.5 rounded-lg text-slate-300">Full portfolio analysis</button>
+        </div>
+      </div>
+
+      <!-- Market index strip -->
+      <div class="flex flex-wrap gap-2 mb-6">
+        <div class="bg-card border border-white/5 rounded-xl px-3 py-2 flex items-center gap-3">
+          <span class="text-slate-400 text-xs font-bold">SPY</span>
+          <span class="text-white font-semibold text-sm">$541.20</span>
+          <span class="text-emerald-400 text-xs bg-emerald-400/10 px-1.5 py-0.5 rounded-full">▲ 0.8%</span>
+        </div>
+        <div class="bg-card border border-white/5 rounded-xl px-3 py-2 flex items-center gap-3">
+          <span class="text-slate-400 text-xs font-bold">QQQ</span>
+          <span class="text-white font-semibold text-sm">$463.80</span>
+          <span class="text-emerald-400 text-xs bg-emerald-400/10 px-1.5 py-0.5 rounded-full">▲ 1.1%</span>
+        </div>
+        <div class="bg-card border border-white/5 rounded-xl px-3 py-2 flex items-center gap-3">
+          <span class="text-slate-400 text-xs font-bold">DIA</span>
+          <span class="text-white font-semibold text-sm">$397.10</span>
+          <span class="text-rose-400 text-xs bg-rose-400/10 px-1.5 py-0.5 rounded-full">▼ 0.2%</span>
+        </div>
+        <div class="bg-card border border-white/5 rounded-xl px-3 py-2 flex items-center gap-3">
+          <span class="text-slate-400 text-xs font-bold">IWM</span>
+          <span class="text-white font-semibold text-sm">$201.40</span>
+          <span class="text-rose-400 text-xs bg-rose-400/10 px-1.5 py-0.5 rounded-full">▼ 0.4%</span>
+        </div>
+      </div>
+
+      <!-- Top picks grid -->
+      <h3 class="text-sm font-semibold text-white mb-3">📈 Top Picks Today</h3>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div class="bg-card border border-white/5 rounded-xl p-4">
+          <div class="flex justify-between items-start mb-2"><span class="font-bold text-white">NVDA</span><span class="text-emerald-400 text-xs">9.4</span></div>
+          <div class="text-slate-400 text-sm mb-2">$875.20</div>
+          <div class="text-xs text-slate-500">• Strong momentum<br>• Analyst upgrades</div>
+        </div>
+        <div class="bg-card border border-white/5 rounded-xl p-4">
+          <div class="flex justify-between items-start mb-2"><span class="font-bold text-white">META</span><span class="text-emerald-400 text-xs">8.7</span></div>
+          <div class="text-slate-400 text-sm mb-2">$521.40</div>
+          <div class="text-xs text-slate-500">• AI revenue growth<br>• Volume surge</div>
+        </div>
+        <div class="bg-card border border-white/5 rounded-xl p-4">
+          <div class="flex justify-between items-start mb-2"><span class="font-bold text-white">AMD</span><span class="text-emerald-400 text-xs">8.2</span></div>
+          <div class="text-slate-400 text-sm mb-2">$163.80</div>
+          <div class="text-xs text-slate-500">• Data centre wins<br>• RSI 58 — healthy</div>
+        </div>
+        <div class="bg-card border border-white/5 rounded-xl p-4">
+          <div class="flex justify-between items-start mb-2"><span class="font-bold text-white">MSFT</span><span class="text-emerald-400 text-xs">7.9</span></div>
+          <div class="text-slate-400 text-sm mb-2">$420.10</div>
+          <div class="text-xs text-slate-500">• Azure growth<br>• Defensive quality</div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SCREEN 6: PORTFOLIO TAB WITH HEALTH SCORE -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="screen-portfolio" class="screen min-h-screen">
+  <div class="flex h-screen">
+    <aside class="hidden md:flex flex-col w-56 border-r border-white/5 bg-card shrink-0">
+      <div class="flex items-center gap-2.5 px-5 py-5 border-b border-white/5">
+        <div class="w-8 h-8 rounded-xl gradient-btn flex items-center justify-center text-sm">📈</div>
+        <span class="font-bold gradient-text">StockAI</span>
+      </div>
+      <nav class="flex-1 px-3 py-4 space-y-1">
+        <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 text-sm font-medium cursor-pointer" onclick="show('dashboard')">📰 Brief</div>
+        <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 text-sm font-medium cursor-pointer" onclick="show('chat')">💬 Chat</div>
+        <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/10 text-white text-sm font-medium">💼 Portfolio</div>
+        <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 text-sm font-medium cursor-pointer">⭐ Watchlist</div>
+        <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 text-sm font-medium cursor-pointer">⚙️ Settings</div>
+      </nav>
+    </aside>
+
+    <main class="flex-1 overflow-y-auto p-6">
+      <!-- Health Score + Summary -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        <!-- Health Score Gauge -->
+        <div class="bg-card border border-white/5 rounded-2xl p-5 flex flex-col items-center">
+          <p class="text-xs text-slate-500 mb-3">Portfolio Health Score</p>
+          <div class="relative w-32 h-32 mb-3">
+            <svg class="w-full h-full -rotate-90" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="10"/>
+              <circle cx="50" cy="50" r="40" fill="none" stroke="url(#scoreGrad)" stroke-width="10" stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="83"/>
+              <defs>
+                <linearGradient id="scoreGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#f59e0b"/>
+                  <stop offset="100%" stop-color="#f97316"/>
+                </linearGradient>
+              </defs>
+            </svg>
+            <div class="absolute inset-0 flex flex-col items-center justify-center">
+              <span class="text-3xl font-bold text-amber-400">67</span>
+              <span class="text-xs text-slate-500">/ 100</span>
+            </div>
+          </div>
+          <div class="space-y-1.5 w-full">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-500">Diversification</span>
+              <div class="flex items-center gap-2">
+                <div class="w-16 h-1.5 bg-white/5 rounded-full"><div class="h-full bg-rose-400 rounded-full" style="width:40%"></div></div>
+                <span class="text-rose-400">10/25</span>
+              </div>
+            </div>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-500">Risk Alignment</span>
+              <div class="flex items-center gap-2">
+                <div class="w-16 h-1.5 bg-white/5 rounded-full"><div class="h-full bg-amber-400 rounded-full" style="width:64%"></div></div>
+                <span class="text-amber-400">16/25</span>
+              </div>
+            </div>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-500">Goal Alignment</span>
+              <div class="flex items-center gap-2">
+                <div class="w-16 h-1.5 bg-white/5 rounded-full"><div class="h-full bg-emerald-400 rounded-full" style="width:84%"></div></div>
+                <span class="text-emerald-400">21/25</span>
+              </div>
+            </div>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-500">Quality</span>
+              <div class="flex items-center gap-2">
+                <div class="w-16 h-1.5 bg-white/5 rounded-full"><div class="h-full bg-emerald-400 rounded-full" style="width:80%"></div></div>
+                <span class="text-emerald-400">20/25</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Summary cards -->
+        <div class="lg:col-span-2 grid grid-cols-2 gap-3">
+          <div class="bg-card border border-white/5 rounded-xl p-4">
+            <p class="text-xs text-slate-500 mb-1">Total Value</p>
+            <p class="text-2xl font-bold text-white">$48,240</p>
+            <p class="text-xs text-emerald-400 mt-0.5">▲ $2,180 today (+4.7%)</p>
+          </div>
+          <div class="bg-card border border-white/5 rounded-xl p-4">
+            <p class="text-xs text-slate-500 mb-1">Total Gain / Loss</p>
+            <p class="text-2xl font-bold text-emerald-400">+$8,420</p>
+            <p class="text-xs text-slate-500 mt-0.5">+21.2% since start</p>
+          </div>
+          <div class="bg-card border border-white/5 rounded-xl p-4">
+            <p class="text-xs text-slate-500 mb-1">Broker Account</p>
+            <p class="text-sm font-semibold text-white">Robinhood ••••4821</p>
+            <p class="text-xs text-emerald-400 mt-0.5">✓ Synced 2 min ago</p>
+          </div>
+          <div class="bg-card border border-white/5 rounded-xl p-4">
+            <p class="text-xs text-slate-500 mb-1">Est. Annual Dividends</p>
+            <p class="text-2xl font-bold text-white">$840</p>
+            <p class="text-xs text-slate-500 mt-0.5">1.74% yield</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alert banner -->
+      <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 flex items-start gap-3 mb-5">
+        <span class="text-amber-400 text-lg shrink-0">⚠️</span>
+        <div class="flex-1">
+          <p class="text-amber-300 text-sm font-medium">Concentration Alert</p>
+          <p class="text-amber-200/70 text-xs mt-0.5">Technology sector is 61% of your portfolio. Your moderate risk profile suggests a max of 40%. Consider trimming NVDA (currently 23% of total).</p>
+        </div>
+        <button class="text-xs text-amber-400/60 hover:text-amber-400 shrink-0 transition-colors" onclick="show('chat')">Ask AI →</button>
+      </div>
+
+      <!-- Positions table -->
+      <div class="bg-card border border-white/5 rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-white/5 flex items-center justify-between">
+          <h3 class="text-sm font-semibold text-white">Positions (14)</h3>
+          <div class="flex gap-2">
+            <button class="text-xs text-slate-500 hover:text-white border border-white/10 px-2.5 py-1 rounded-lg transition-colors">+ Add manual</button>
+            <button onclick="show('broker-hub')" class="text-xs gradient-btn px-2.5 py-1 rounded-lg text-white">+ Connect broker</button>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs">
+            <thead>
+              <tr class="border-b border-white/5 text-slate-500">
+                <th class="text-left px-4 py-2.5">Ticker</th>
+                <th class="text-right px-3 py-2.5">Shares</th>
+                <th class="text-right px-3 py-2.5">Avg Cost</th>
+                <th class="text-right px-3 py-2.5">Price</th>
+                <th class="text-right px-3 py-2.5">Value</th>
+                <th class="text-right px-3 py-2.5">G/L</th>
+                <th class="text-right px-3 py-2.5">Wt%</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-white/5 hover:bg-white/2 transition-colors">
+                <td class="px-4 py-3"><span class="font-bold text-white">NVDA</span><br><span class="text-slate-600">Nvidia</span></td>
+                <td class="px-3 py-3 text-right text-slate-300">12.5</td>
+                <td class="px-3 py-3 text-right text-slate-300">$620.00</td>
+                <td class="px-3 py-3 text-right text-white">$875.20</td>
+                <td class="px-3 py-3 text-right text-white">$10,940</td>
+                <td class="px-3 py-3 text-right text-emerald-400">+$3,190<br>+41.1%</td>
+                <td class="px-3 py-3 text-right text-amber-400 font-medium">22.7%</td>
+              </tr>
+              <tr class="border-b border-white/5 hover:bg-white/2 transition-colors">
+                <td class="px-4 py-3"><span class="font-bold text-white">AAPL</span><br><span class="text-slate-600">Apple</span></td>
+                <td class="px-3 py-3 text-right text-slate-300">25.0</td>
+                <td class="px-3 py-3 text-right text-slate-300">$165.00</td>
+                <td class="px-3 py-3 text-right text-white">$189.30</td>
+                <td class="px-3 py-3 text-right text-white">$4,732</td>
+                <td class="px-3 py-3 text-right text-emerald-400">+$607<br>+14.7%</td>
+                <td class="px-3 py-3 text-right text-slate-400">9.8%</td>
+              </tr>
+              <tr class="border-b border-white/5 hover:bg-white/2 transition-colors">
+                <td class="px-4 py-3"><span class="font-bold text-white">MSFT</span><br><span class="text-slate-600">Microsoft</span></td>
+                <td class="px-3 py-3 text-right text-slate-300">10.0</td>
+                <td class="px-3 py-3 text-right text-slate-300">$380.00</td>
+                <td class="px-3 py-3 text-right text-white">$420.10</td>
+                <td class="px-3 py-3 text-right text-white">$4,201</td>
+                <td class="px-3 py-3 text-right text-emerald-400">+$401<br>+10.6%</td>
+                <td class="px-3 py-3 text-right text-slate-400">8.7%</td>
+              </tr>
+              <tr class="hover:bg-white/2 transition-colors">
+                <td class="px-4 py-3"><span class="font-bold text-white">TSLA</span><br><span class="text-slate-600">Tesla</span></td>
+                <td class="px-3 py-3 text-right text-slate-300">15.0</td>
+                <td class="px-3 py-3 text-right text-slate-300">$280.00</td>
+                <td class="px-3 py-3 text-right text-white">$242.10</td>
+                <td class="px-3 py-3 text-right text-white">$3,632</td>
+                <td class="px-3 py-3 text-right text-rose-400">-$568<br>-13.5%</td>
+                <td class="px-3 py-3 text-right text-slate-400">7.5%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SCREEN 7: AI CHAT (personalised) -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="screen-chat" class="screen min-h-screen">
+  <div class="flex h-screen">
+    <aside class="hidden md:flex flex-col w-56 border-r border-white/5 bg-card shrink-0">
+      <div class="flex items-center gap-2.5 px-5 py-5 border-b border-white/5">
+        <div class="w-8 h-8 rounded-xl gradient-btn flex items-center justify-center text-sm">📈</div>
+        <span class="font-bold gradient-text">StockAI</span>
+      </div>
+      <nav class="flex-1 px-3 py-4 space-y-1">
+        <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 text-sm font-medium cursor-pointer" onclick="show('dashboard')">📰 Brief</div>
+        <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/10 text-white text-sm font-medium">💬 Chat</div>
+        <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 text-sm font-medium cursor-pointer" onclick="show('portfolio')">💼 Portfolio</div>
+        <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 text-sm font-medium cursor-pointer">⭐ Watchlist</div>
+        <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 text-sm font-medium cursor-pointer">⚙️ Settings</div>
+      </nav>
+    </aside>
+
+    <div class="flex-1 flex flex-col">
+      <!-- Messages -->
+      <div class="flex-1 overflow-y-auto px-6 py-6 space-y-5">
+        <!-- Context pill -->
+        <div class="flex justify-center">
+          <span class="text-xs bg-blue-500/10 border border-blue-500/20 text-blue-300 px-3 py-1 rounded-full">
+            🔒 Portfolio context active · 14 positions · Moderate risk profile
+          </span>
+        </div>
+
+        <!-- User message -->
+        <div class="flex justify-end">
+          <div class="max-w-lg bg-blue-600/20 border border-blue-500/30 rounded-2xl px-4 py-3 text-sm text-white">
+            Which of my positions is most overvalued right now?
+          </div>
+          <div class="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center ml-3 shrink-0 mt-0.5 text-xs">P</div>
+        </div>
+
+        <!-- AI response -->
+        <div class="flex gap-3">
+          <div class="w-7 h-7 rounded-lg gradient-btn flex items-center justify-center shrink-0 mt-0.5 text-xs">AI</div>
+          <div class="max-w-2xl bg-card border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-200 leading-relaxed">
+            <p class="mb-3">Based on your current holdings, <strong class="text-white">NVDA</strong> shows the highest valuation stretch relative to fundamentals:</p>
+            <div class="bg-white/5 rounded-xl p-3 mb-3 text-xs space-y-1.5">
+              <div class="flex justify-between"><span class="text-slate-400">Your avg cost</span><span class="text-white">$620.00</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Current price</span><span class="text-emerald-400">$875.20 (+41.1%)</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Forward P/E</span><span class="text-amber-400">38.2× (sector avg: 26×)</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Portfolio weight</span><span class="text-amber-400">22.7% — your largest position</span></div>
+            </div>
+            <p class="text-slate-300">Given your <span class="text-blue-300">moderate risk profile</span> and 15-year retirement horizon, holding a 23% single-stock position in a 38× forward P/E name creates meaningful concentration risk. Consider trimming 3–4 shares to bring this to ~15% of your portfolio.</p>
+            <div class="flex items-center gap-1.5 mt-3 pt-3 border-t border-white/5">
+              <span class="text-xs text-slate-600">Tickers referenced:</span>
+              <span class="text-xs bg-white/5 text-slate-400 px-2 py-0.5 rounded-full">NVDA</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Follow-up user -->
+        <div class="flex justify-end">
+          <div class="max-w-lg bg-blue-600/20 border border-blue-500/30 rounded-2xl px-4 py-3 text-sm text-white">
+            council NVDA
+          </div>
+          <div class="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center ml-3 shrink-0 mt-0.5 text-xs">P</div>
+        </div>
+
+        <!-- Agent council triggered -->
+        <div class="flex gap-3">
+          <div class="w-7 h-7 rounded-lg gradient-btn flex items-center justify-center shrink-0 mt-0.5 text-xs">AI</div>
+          <div class="max-w-2xl bg-card border border-purple-500/20 rounded-2xl px-4 py-3 text-sm text-slate-200">
+            <p class="text-purple-300 font-medium mb-3">🎯 Launching Agent Council for NVDA…</p>
+            <div class="grid grid-cols-3 gap-2 mb-3">
+              <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3">
+                <p class="text-emerald-300 text-xs font-semibold mb-1">🐂 Bull Agent</p>
+                <p class="text-xs text-slate-400">AI infrastructure supercycle. Data centre demand still in early innings. 45% revenue growth projected.</p>
+              </div>
+              <div class="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3">
+                <p class="text-rose-300 text-xs font-semibold mb-1">🐻 Bear Agent</p>
+                <p class="text-xs text-slate-400">38× P/E prices in perfection. AMD gaining GPU share. China export restrictions loom.</p>
+              </div>
+              <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
+                <p class="text-amber-300 text-xs font-semibold mb-1">⚖️ Risk Agent</p>
+                <p class="text-xs text-slate-400">Beta 1.8 — high volatility. Earnings in 3 weeks. You hold 22.7% — above safe concentration.</p>
+              </div>
+            </div>
+            <div class="bg-purple-500/10 border border-purple-500/30 rounded-xl p-3 text-xs">
+              <p class="text-purple-300 font-semibold mb-1">🎯 Committee Verdict: Hold / Trim edges</p>
+              <p class="text-slate-400">Strong fundamental case, but your specific position size (22.7%) is the primary risk. Recommend trimming to 15% on the next 5%+ up-day. Confidence: 7/10.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input -->
+      <div class="border-t border-white/5 px-6 py-4">
+        <div class="flex gap-3">
+          <input placeholder='Ask about your portfolio, or type "council TSLA"…' class="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/60" />
+          <button class="gradient-btn px-4 py-2.5 rounded-xl text-white text-sm">→</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SCREEN 8: ALERTS -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="screen-alerts" class="screen min-h-screen flex items-center justify-center p-6">
+  <div class="slide-in w-full max-w-lg">
+    <h2 class="text-xl font-bold text-white mb-6">🔔 Smart Alerts</h2>
+    <div class="space-y-3">
+      <!-- Critical -->
+      <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex gap-3">
+        <span class="text-amber-400 text-lg shrink-0">⚠️</span>
+        <div class="flex-1">
+          <div class="flex items-center justify-between mb-0.5">
+            <span class="text-amber-300 text-sm font-semibold">Concentration Risk</span>
+            <span class="text-xs text-amber-500/60">Just now</span>
+          </div>
+          <p class="text-amber-200/70 text-xs">NVDA is 22.7% of your portfolio — above your moderate risk cap of 15%. Consider trimming on the next up-day.</p>
+        </div>
+      </div>
+      <!-- Warning -->
+      <div class="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 flex gap-3">
+        <span class="text-rose-400 text-lg shrink-0">📉</span>
+        <div class="flex-1">
+          <div class="flex items-center justify-between mb-0.5">
+            <span class="text-rose-300 text-sm font-semibold">TSLA Down 13.5%</span>
+            <span class="text-xs text-rose-500/60">2h ago</span>
+          </div>
+          <p class="text-rose-200/70 text-xs">Your TSLA position is showing a $568 unrealized loss. Given your tax-sensitive profile, this may be a tax-loss harvesting opportunity.</p>
+        </div>
+      </div>
+      <!-- Info -->
+      <div class="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 flex gap-3">
+        <span class="text-blue-400 text-lg shrink-0">📅</span>
+        <div class="flex-1">
+          <div class="flex items-center justify-between mb-0.5">
+            <span class="text-blue-300 text-sm font-semibold">Earnings Alert</span>
+            <span class="text-xs text-blue-500/60">1d ago</span>
+          </div>
+          <p class="text-blue-200/70 text-xs">NVDA reports earnings in 3 weeks (Jun 5). You hold 12.5 shares. Historically volatile ±8% around earnings. Consider your position sizing.</p>
+        </div>
+      </div>
+      <!-- Health -->
+      <div class="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4 flex gap-3">
+        <span class="text-purple-400 text-lg shrink-0">📊</span>
+        <div class="flex-1">
+          <div class="flex items-center justify-between mb-0.5">
+            <span class="text-purple-300 text-sm font-semibold">Health Score Dropped</span>
+            <span class="text-xs text-purple-500/60">3d ago</span>
+          </div>
+          <p class="text-purple-200/70 text-xs">Your portfolio health score dropped from 74 to 67. The main driver: Technology sector weight increased to 61% after NVDA's 8% rally this week.</p>
+        </div>
+      </div>
+      <!-- Good news -->
+      <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex gap-3">
+        <span class="text-emerald-400 text-lg shrink-0">💰</span>
+        <div class="flex-1">
+          <div class="flex items-center justify-between mb-0.5">
+            <span class="text-emerald-300 text-sm font-semibold">Dividend Received</span>
+            <span class="text-xs text-emerald-500/60">5d ago</span>
+          </div>
+          <p class="text-emerald-200/70 text-xs">AAPL paid a $0.25/share dividend. You received $6.25. Your estimated annual dividend income is now $840 (1.74% yield).</p>
+        </div>
+      </div>
+    </div>
+
+    <button onclick="show('dashboard')" class="w-full mt-6 gradient-btn py-3 rounded-xl text-white font-medium hover:opacity-90 transition-opacity text-sm">Back to Dashboard</button>
+  </div>
+</div>
+
+</div><!-- end pt-16 wrapper -->
+
+<script>
+let currentQuizStep = 1;
+
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const screen = document.getElementById('screen-' + id);
+  const btn = document.getElementById('btn-' + id);
+  if (screen) { screen.classList.add('active'); screen.classList.add('slide-in'); setTimeout(() => screen.classList.remove('slide-in'), 400); }
+  if (btn) btn.classList.add('active');
+}
+
+// Quiz logic
+function enableNext() {
+  const btn = document.getElementById('quiz-next');
+  btn.disabled = false;
+  btn.classList.remove('opacity-40', 'cursor-not-allowed');
+}
+
+function selectGoal(el) {
+  document.querySelectorAll('.goal-btn').forEach(b => b.classList.remove('border-blue-500', 'bg-blue-500/10'));
+  el.classList.add('border-blue-500', 'bg-blue-500/10');
+  enableNext();
+}
+function selectHorizon(el) {
+  document.querySelectorAll('.horizon-btn').forEach(b => b.classList.remove('border-blue-500', 'bg-blue-500/10'));
+  el.classList.add('border-blue-500', 'bg-blue-500/10');
+  enableNext();
+}
+function selectRisk(el) {
+  document.querySelectorAll('.risk-btn').forEach(b => b.classList.remove('border-blue-500', 'bg-blue-500/10'));
+  el.classList.add('border-blue-500', 'bg-blue-500/10');
+  enableNext();
+}
+function selectExp(el) {
+  document.querySelectorAll('.exp-btn').forEach(b => b.classList.remove('border-blue-500', 'bg-blue-500/10'));
+  el.classList.add('border-blue-500', 'bg-blue-500/10');
+  enableNext();
+}
+function selectTax(el) {
+  document.querySelectorAll('.tax-btn').forEach(b => b.classList.remove('border-blue-500', 'bg-blue-500/10'));
+  el.classList.add('border-blue-500', 'bg-blue-500/10');
+  enableNext();
+}
+function toggleSector(el, isNone) {
+  if (isNone) {
+    document.querySelectorAll('.sector-chip').forEach(c => c.classList.remove('border-blue-500', 'bg-blue-500/10', 'text-white'));
+    el.classList.add('border-blue-500', 'bg-blue-500/10', 'text-white');
+  } else {
+    document.querySelectorAll('.sector-chip').forEach(c => { if (c.textContent.includes('None')) c.classList.remove('border-blue-500', 'bg-blue-500/10', 'text-white'); });
+    el.classList.toggle('border-blue-500'); el.classList.toggle('bg-blue-500/10'); el.classList.toggle('text-white');
+  }
+}
+
+const stepLabels = ['Primary Goal', 'Time Horizon', 'Risk Tolerance', 'Experience', 'Tax Preference', 'Sectors to Avoid'];
+
+function quizNext() {
+  if (currentQuizStep >= 6) return;
+  document.getElementById('quiz-' + currentQuizStep).classList.add('hidden');
+  currentQuizStep++;
+  document.getElementById('quiz-' + currentQuizStep).classList.remove('hidden');
+  document.getElementById('quiz-step-num').textContent = currentQuizStep;
+  document.getElementById('quiz-step-label').textContent = stepLabels[currentQuizStep - 1];
+  document.getElementById('quiz-progress').style.width = (currentQuizStep / 6 * 100) + '%';
+  document.getElementById('quiz-back').classList.remove('hidden');
+  const btn = document.getElementById('quiz-next');
+  if (currentQuizStep === 6) { btn.textContent = 'Done ✓'; btn.disabled = false; btn.classList.remove('opacity-40','cursor-not-allowed'); btn.onclick = () => show('broker-hub'); }
+  else { btn.disabled = true; btn.classList.add('opacity-40','cursor-not-allowed'); btn.textContent = 'Continue →'; btn.onclick = quizNext; }
+}
+
+function quizPrev() {
+  if (currentQuizStep <= 1) return;
+  document.getElementById('quiz-' + currentQuizStep).classList.add('hidden');
+  currentQuizStep--;
+  document.getElementById('quiz-' + currentQuizStep).classList.remove('hidden');
+  document.getElementById('quiz-step-num').textContent = currentQuizStep;
+  document.getElementById('quiz-step-label').textContent = stepLabels[currentQuizStep - 1];
+  document.getElementById('quiz-progress').style.width = (currentQuizStep / 6 * 100) + '%';
+  if (currentQuizStep === 1) document.getElementById('quiz-back').classList.add('hidden');
+  const btn = document.getElementById('quiz-next');
+  btn.textContent = 'Continue →'; btn.onclick = quizNext;
+  enableNext();
+}
+
+// Start on welcome
+show('onboarding-welcome');
+</script>
+</body>
+</html>

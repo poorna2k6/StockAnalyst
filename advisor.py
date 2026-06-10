@@ -58,6 +58,22 @@ _MODERATOR_SYSTEM = (
 )
 
 
+# ── Compliance disclaimer ─────────────────────────────────────────────────────
+
+_DISCLAIMER = (
+    "\n\n---\n*Educational analysis only — not personalized investment advice under the "
+    "Investment Advisers Act of 1940. Consult a licensed financial adviser before making "
+    "investment decisions.*"
+)
+
+
+def _ensure_disclaimer(text: str) -> str:
+    """Structural post-processor: appends disclaimer if AI omitted it."""
+    if "not financial advice" not in text.lower() and "educational" not in text.lower():
+        return text + _DISCLAIMER
+    return text
+
+
 # ── Model client helpers ──────────────────────────────────────────────────────
 
 def _resolve_api_key(model: str, user_settings: Optional[dict]) -> str | None:
@@ -313,7 +329,7 @@ def get_advice(
     if user_id:
         import token_tracker
         token_tracker.track_usage(user_id, "portfolio_advice", model, in_t, out_t, _is_byok(user_settings))
-    return text
+    return _ensure_disclaimer(text)
 
 
 def get_deep_analysis_advice(
@@ -340,7 +356,7 @@ def get_deep_analysis_advice(
     if user_id:
         import token_tracker
         token_tracker.track_usage(user_id, "deep_analysis", model, in_t, out_t, _is_byok(user_settings))
-    return text
+    return _ensure_disclaimer(text)
 
 
 def get_screener_advice(
@@ -388,7 +404,7 @@ def get_screener_advice(
     if user_id:
         import token_tracker
         token_tracker.track_usage(user_id, "screener", model, in_t, out_t, _is_byok(user_settings))
-    return text
+    return _ensure_disclaimer(text)
 
 
 def get_chat_response(
@@ -407,11 +423,13 @@ def get_chat_response(
     )
     prompt = f"{context_data}\n\nUser question: {message}"
 
-    text, model, in_t, out_t = _call_ai(prompt, system, 2000, user_settings)
+    # Wrap user message in delimiter to resist prompt injection
+    safe_prompt = f"{context_data}\n\n<user_question>\n{message}\n</user_question>\n\nAnswer only the investment question inside <user_question> tags."
+    text, model, in_t, out_t = _call_ai(safe_prompt, system, 2000, user_settings)
     if user_id:
         import token_tracker
         token_tracker.track_usage(user_id, "chat", model, in_t, out_t, _is_byok(user_settings))
-    return text
+    return _ensure_disclaimer(text)
 
 
 # ── Agent Council (async, 3 agents + moderator) ───────────────────────────────

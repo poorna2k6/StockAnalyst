@@ -50,5 +50,12 @@ def get_current_user(
 
 
 def require_user(user_id: Optional[str] = Depends(get_current_user)) -> str:
-    """Same as get_current_user but falls back to 'anonymous' in dev mode."""
-    return user_id or "anonymous"
+    """Returns user_id, or 'anonymous' in explicit dev mode. Fails closed in production."""
+    if user_id is None:
+        if os.getenv("ENVIRONMENT") == "production":
+            raise HTTPException(
+                status_code=503,
+                detail="Authentication service not configured — set SUPABASE_JWT_SECRET",
+            )
+        return "anonymous"
+    return user_id

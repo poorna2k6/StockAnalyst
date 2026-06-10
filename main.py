@@ -9,9 +9,12 @@ import os
 import re
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 import analyzer
 import portfolio as portfolio_store
@@ -51,14 +54,31 @@ async def lifespan(app: FastAPI):
     yield
 
 
+def _get_rate_limit_key(request: Request) -> str:
+    """Rate-limit by user_id when authenticated, fall back to IP."""
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        try:
+            from auth_middleware import _decode
+            payload = _decode(auth[7:])
+            return f"user:{payload['sub']}"
+        except Exception:
+            pass
+    return get_remote_address(request)
+
+
+limiter = Limiter(key_func=_get_rate_limit_key)
+
 app = FastAPI(
     title="AI Stock Analyst",
     description="Real-time AI-powered stock analysis. All AI grounded in live Yahoo Finance data.",
     version="3.0.0",
     lifespan=lifespan,
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# ── CORS — allow Vercel frontend (and localhost dev) ──────────────────────────
+# ── CORS — explicit allowed origins only ──────────────────────────────────────
 _allowed_origins = [
     "http://localhost:5173",
     "http://localhost:3000",
@@ -66,10 +86,13 @@ _allowed_origins = [
 if os.getenv("FRONTEND_URL"):
     _allowed_origins.append(os.getenv("FRONTEND_URL"))
 
+# In dev without FRONTEND_URL set, allow Vercel previews; in production lock to exact domain.
+_origin_regex = None if os.getenv("ENVIRONMENT") == "production" else r"https://.*\.vercel\.app"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origin_regex=_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -242,7 +265,8 @@ def validate_ticker(ticker: str):
 # ── Portfolio advisor ──────────────────────────────────────────────────────────
 
 @app.get("/advice", tags=["advisor"])
-def get_advice(risk_tolerance: str = "moderate", question: Optional[str] = None, user_id: str = Depends(require_user)):
+@limiter.limit("10/minute;50/hour")
+def get_advice(request: Request, risk_tolerance: str = "moderate", question: Optional[str] = None, user_id: str = Depends(require_user)):
     try:
         import supabase_client as db
         settings = db.get_user_settings(user_id) if db.is_configured() else None
@@ -255,7 +279,8 @@ def get_advice(risk_tolerance: str = "moderate", question: Optional[str] = None,
 
 
 @app.post("/advice", tags=["advisor"])
-def get_advice_with_payload(req: AdviceRequest, user_id: str = Depends(require_user)):
+@limiter.limit("10/minute;50/hour")
+def get_advice_with_payload(request: Request, req: AdviceRequest, user_id: str = Depends(require_user)):
     try:
         import supabase_client as db
         settings = db.get_user_settings(user_id) if db.is_configured() else None
@@ -267,10 +292,33 @@ def get_advice_with_payload(req: AdviceRequest, user_id: str = Depends(require_u
 
 # ── Chat (general investment questions) ───────────────────────────────────────
 
+_INJECTION_PATTERNS = [
+    r"ignore\s+(previous|all|above|prior)\s+(instructions?|rules?|prompts?)",
+    r"you\s+are\s+now\s+a?\s*(trading|financial\s+advisor|investment\s+bot)",
+    r"(disregard|forget|override)\s+(your\s+)?(previous|prior|all)\s+(instructions?|guidelines?)",
+    r"act\s+as\s+(a|an)\s+(licensed|registered|professional)\s+(financial|investment)",
+    r"pretend\s+(you\s+are|to\s+be)",
+    r"\bDAN\b",
+    r"jailbreak",
+]
+_INJECTION_RE = re.compile("|".join(_INJECTION_PATTERNS), re.IGNORECASE)
+
+
+def _sanitize_chat_input(message: str) -> str:
+    """Reject prompt injection attempts; truncate to prevent context abuse."""
+    if _INJECTION_RE.search(message):
+        raise HTTPException(
+            status_code=400,
+            detail="Message contains disallowed content. Please ask a genuine investment question.",
+        )
+    return message[:2000]
+
+
 @app.post("/chat", tags=["chat"])
-def chat(body: dict, user_id: str = Depends(require_user)):
+@limiter.limit("20/minute;100/hour")
+def chat(request: Request, body: dict, user_id: str = Depends(require_user)):
     """General investment chat with smart intent detection and live data fetching."""
-    message = body.get("message", "").strip()
+    message = _sanitize_chat_input(body.get("message", "").strip())
     session_id = body.get("session_id", "default")
     if not message:
         raise HTTPException(status_code=400, detail="message is required")
@@ -340,7 +388,8 @@ def get_chat_history(session_id: str = "default", user_id: str = Depends(require
 # ── Agent Council ──────────────────────────────────────────────────────────────
 
 @app.post("/council/{ticker}", tags=["council"])
-async def agent_council(ticker: str, user_id: str = Depends(require_user)):
+@limiter.limit("5/minute;20/hour")
+async def agent_council(request: Request, ticker: str, user_id: str = Depends(require_user)):
     """
     3-agent debate (Bull / Bear / Risk) in parallel via Haiku,
     then Sonnet moderator synthesizes the final verdict.
@@ -517,12 +566,19 @@ def get_usage(user_id: str = Depends(require_user)):
 
 # ── Cache management ───────────────────────────────────────────────────────────
 
+def _require_admin(user_id: str = Depends(require_user)) -> str:
+    admin_ids = set(filter(None, os.getenv("ADMIN_USER_IDS", "").split(",")))
+    if admin_ids and user_id not in admin_ids:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user_id
+
+
 @app.get("/cache/stats", tags=["admin"])
-def cache_stats():
+def cache_stats(user_id: str = Depends(_require_admin)):
     return _cache.stats()
 
 
 @app.post("/cache/clear", tags=["admin"])
-def clear_cache():
+def clear_cache(user_id: str = Depends(_require_admin)):
     _cache.clear()
     return {"message": "Cache cleared."}

@@ -229,7 +229,15 @@ def _build_deep_data_block(analysis: DeepStockAnalysis) -> str:
     if analysis.technicals:
         t = analysis.technicals
         lines += [
-            "[TECHNICALS — computed from yfinance OHLCV history]",
+            "[TECHNICALS — computed from split-adjusted OHLCV history]",
+            # t.current_price is the last adj. close from the same fetch as the SMAs.
+            # Show it explicitly so the AI compares SMAs against the correct price basis,
+            # not the real-time quote above (which may diverge after a recent split).
+            f"Adj. close basis (SMA reference price): ${t.current_price:.2f}" if t.current_price else "Adj. close basis: N/A",
+            *(["⚠️  NOTE: real-time quote and adj. close diverge >10% — recent split or data lag likely; SMAs are relative to adj. close basis only"]
+              if (analysis.quote and t.current_price and analysis.quote.price > 0
+                  and abs(analysis.quote.price - t.current_price) / analysis.quote.price > 0.10)
+              else []),
             f"RSI(14): {t.rsi_14 or 'N/A'} | Trend: {t.trend.upper()}",
             f"MACD Line: {t.macd_line or 'N/A'} | Signal: {t.macd_signal or 'N/A'} | Histogram: {t.macd_histogram or 'N/A'}",
             f"SMA20: {t.sma_20 or 'N/A'} | SMA50: {t.sma_50 or 'N/A'} | SMA200: {t.sma_200 or 'N/A'}",
@@ -241,6 +249,7 @@ def _build_deep_data_block(analysis: DeepStockAnalysis) -> str:
         ]
     if analysis.fundamentals:
         f = analysis.fundamentals
+        _de_display = f"{f.debt_to_equity / 100:.2f}x" if f.debt_to_equity is not None else "N/A"
         lines += [
             "[FUNDAMENTALS — from Yahoo Finance .info]",
             f"Sector: {f.sector or 'N/A'} | Industry: {f.industry or 'N/A'}",
@@ -248,7 +257,7 @@ def _build_deep_data_block(analysis: DeepStockAnalysis) -> str:
             f"P/B: {f.pb_ratio or 'N/A'} | PEG: {f.peg_ratio or 'N/A'}",
             f"EPS (trailing): {f.eps_trailing or 'N/A'} | EPS (forward): {f.eps_forward or 'N/A'}",
             f"ROE: {(f.roe*100):.1f}%" if f.roe is not None else "ROE: N/A",
-            f"Debt/Equity: {f.debt_to_equity or 'N/A'}",
+            f"Debt/Equity: {_de_display}",
             f"Revenue Growth (YoY): {(f.revenue_growth*100):.1f}%" if f.revenue_growth is not None else "Revenue Growth: N/A",
             f"Profit Margin: {(f.profit_margin*100):.1f}%" if f.profit_margin is not None else "Profit Margin: N/A",
             f"Free Cash Flow: ${f.free_cashflow/1e9:.1f}B" if f.free_cashflow is not None else "Free Cash Flow: N/A",

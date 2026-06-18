@@ -202,7 +202,9 @@ def _score_goal_alignment(
 
 
 def _score_quality(summary: PortfolioSummary) -> HealthDimension:
-    dim = HealthDimension(name="Quality")
+    # "Portfolio Performance" — reflects realized P&L, NOT business quality.
+    # P&L% depends entirely on entry price, not company fundamentals.
+    dim = HealthDimension(name="Portfolio Performance")
     positions = summary.positions
     score = 25.0
     issues: list[str] = []
@@ -212,7 +214,6 @@ def _score_quality(summary: PortfolioSummary) -> HealthDimension:
         dim.score = 12.5
         return dim
 
-    # Use gain/loss as a quality proxy (real fundamental scores need async fetch)
     total_weighted_gl = sum(p.gain_loss_pct * (p.weight / 100) for p in positions)
 
     if total_weighted_gl < -20:

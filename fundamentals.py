@@ -150,8 +150,9 @@ def compute_fundamental_score(f: FundamentalsData) -> FundamentalScore:
         reasoning.append("Profit margin — data unavailable")
 
     # Debt/Equity (max 1.5, lower is better)
+    # yfinance debtToEquity is percentage-scaled (e.g. 150 = 1.5x D/E), always divide by 100.
     if f.debt_to_equity is not None:
-        de = f.debt_to_equity / 100 if f.debt_to_equity > 10 else f.debt_to_equity
+        de = f.debt_to_equity / 100
         if de <= 0.3:
             score += 1.5
             reasoning.append(f"D/E {de:.2f} — very low leverage")

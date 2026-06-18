@@ -515,6 +515,65 @@ def get_market_news(max_items: int = 15):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/news/tagged", tags=["news"])
+def get_tagged_news(max_items: int = 20):
+    """Market news enriched with per-article ticker tags and sentiment scores."""
+    from news_fetcher import get_market_news as _gmn, get_ticker_news as _gtn
+    from models import TaggedNewsItem, TaggedNewsBundle
+    import re as _re
+    from validator import utcnow_iso
+
+    _POSITIVE = {
+        "beat", "beats", "upgrade", "upgraded", "growth", "strong", "record",
+        "surge", "rally", "gains", "profit", "bullish", "buy", "outperform",
+        "raised", "boost", "soar", "positive", "higher", "upside",
+    }
+    _NEGATIVE = {
+        "miss", "misses", "downgrade", "downgraded", "loss", "weak", "layoff",
+        "fraud", "investigation", "warning", "decline", "drop", "fall",
+        "bearish", "sell", "underperform", "cut", "concern", "risk", "recall",
+    }
+
+    try:
+        bundle = _gmn(max_items)
+        tagged: list[TaggedNewsItem] = []
+        overall_pos = overall_neg = 0
+
+        for article in bundle.articles:
+            words = set(article.title.lower().split())
+            p = len(words & _POSITIVE)
+            n = len(words & _NEGATIVE)
+            score = p - n
+            sentiment = "bullish" if score > 0 else ("bearish" if score < 0 else "neutral")
+            overall_pos += (1 if score > 0 else 0)
+            overall_neg += (1 if score < 0 else 0)
+
+            # Tickers from yfinance related_tickers field (stored in NewsItem if present)
+            tickers = getattr(article, "related_tickers", []) or []
+            # Also scan title for known ticker patterns
+            found = _re.findall(r'\b([A-Z]{1,5})\b', article.title)
+            from screener import SCREENER_UNIVERSE
+            tickers = list({t for t in (tickers + found) if t in SCREENER_UNIVERSE})[:5]
+
+            tagged.append(TaggedNewsItem(
+                title=article.title,
+                url=article.url,
+                publisher=article.publisher,
+                published_at=article.published_at,
+                tickers=tickers,
+                sentiment=sentiment,
+                sentiment_score=score,
+            ))
+
+        total = overall_pos + overall_neg + (len(tagged) - overall_pos - overall_neg)
+        overall = "bullish" if overall_pos / max(total, 1) >= 0.5 else (
+            "bearish" if overall_neg / max(total, 1) >= 0.5 else "neutral"
+        )
+        return TaggedNewsBundle(articles=tagged, fetched_at=utcnow_iso(), overall_sentiment=overall)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── Screener ───────────────────────────────────────────────────────────────────
 
 @app.get("/screener/best-day", tags=["screener"])
@@ -552,6 +611,49 @@ def correlated_stocks(ticker: str, top_n: int = 5):
     try:
         from screener import find_correlated_stocks
         return find_correlated_stocks(ticker, top_n=top_n)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Signal Scanner ────────────────────────────────────────────────────────────
+
+@app.get("/signals", tags=["signals"])
+@limiter.limit("10/minute;30/hour")
+def get_signals(request: Request, user_id: str = Depends(require_user)):
+    """
+    AI signal scan: synthesizes recent news + momentum screener into top-5 stock setups.
+    Results cached for 5 minutes. Not price prediction — setup analysis only.
+    """
+    import cache as _cache
+    from validator import utcnow_iso
+    from models import SignalScanResult
+
+    cache_key = "signals:latest"
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        import supabase_client as db
+        settings = db.get_user_settings(user_id) if db.is_configured() else None
+
+        from news_fetcher import get_market_news as _gmn, format_news_for_prompt
+        from screener import screen_best_of_day
+
+        news_bundle = _gmn(max_items=20)
+        news_text = format_news_for_prompt(news_bundle, max_items=18)
+
+        screener_result = screen_best_of_day(top_n=20)
+        picks = [p for p in screener_result.picks if hasattr(p, "momentum_1d")]
+
+        result = ai_advisor.get_signal_scan(
+            news_text=news_text,
+            screener_picks=picks,
+            user_settings=settings,
+            user_id=user_id,
+        )
+        _cache.set(cache_key, result, 300)  # 5-minute cache
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -6,7 +6,9 @@ from typing import Optional
 
 import anthropic
 
-from models import PortfolioSummary, DeepStockAnalysis, ScreenerResult, DayPick, LongTermPick
+import json
+
+from models import PortfolioSummary, DeepStockAnalysis, ScreenerResult, DayPick, LongTermPick, StockSignal, SignalScanResult
 from news_fetcher import format_news_for_prompt
 
 # ── Shared grounding system prompt ────────────────────────────────────────────
@@ -490,3 +492,133 @@ async def get_agent_council(
         "verdict": mod_text,
         "fetched_at": analysis.fetched_at,
     }
+
+
+# ── Signal Scanner ────────────────────────────────────────────────────────────
+
+_SIGNAL_SYSTEM = (
+    "You are a market signal analyst. You synthesize news flow and technical momentum data "
+    "to identify stocks with the strongest near-term setups. You do NOT predict prices. "
+    "You identify setups and explain the conditions. "
+    "RULES: Never give price targets. Use 'high/medium/low' confidence only. "
+    "lean must be exactly 'bullish', 'bearish', or 'neutral'. "
+    "signal_type must be exactly one of: 'momentum_burst', 'news_catalyst', 'oversold_bounce', 'sector_rotation'. "
+    "ai_rationale must be 1-2 sentences, grounded only in the data provided. "
+    "Return ONLY a valid JSON object — no markdown, no explanation, no extra text."
+)
+
+_SIGNAL_PROMPT_TEMPLATE = """\
+NEWS HEADLINES (recent market news):
+{news_block}
+
+TOP MOMENTUM STOCKS (from screener):
+{screener_block}
+
+Based on the data above, identify up to 5 stocks with the strongest setups right now.
+Return ONLY this JSON (no markdown fences, no extra keys):
+{{
+  "market_summary": "<one sentence on overall market mood based on the news>",
+  "signals": [
+    {{
+      "ticker": "AAPL",
+      "signal_type": "momentum_burst",
+      "lean": "bullish",
+      "confidence": "high",
+      "ai_rationale": "Volume is 2.8x the 20-day average with RSI still below 70, suggesting momentum has room to continue. Recent news catalyst aligns with the technical breakout."
+    }}
+  ]
+}}
+"""
+
+
+def get_signal_scan(
+    news_text: str,
+    screener_picks: list[DayPick],
+    user_settings: Optional[dict] = None,
+    user_id: Optional[str] = None,
+) -> SignalScanResult:
+    """
+    Synthesize news flow + screener momentum data into ranked signal cards.
+    Returns SignalScanResult with up to 5 StockSignal objects.
+    No price targets. Framed as setup analysis, not prediction.
+    """
+    from validator import utcnow_iso
+    import token_tracker
+
+    now_iso = utcnow_iso()
+
+    screener_block = "\n".join(
+        f"{p.ticker}: momentum_1d={p.momentum_1d:+.1f}% | rsi={p.rsi_14 or 'N/A'} | "
+        f"volume_ratio={p.volume_ratio or 'N/A'}x | score={p.composite_score:.1f} | "
+        f"news={p.news_count} article(s)"
+        for p in screener_picks[:15]
+    ) or "No screener data available."
+
+    prompt = _SIGNAL_PROMPT_TEMPLATE.format(
+        news_block=news_text or "No recent news available.",
+        screener_block=screener_block,
+    )
+
+    try:
+        raw_text, model_name, in_tok, out_tok = _call_ai(
+            prompt=prompt,
+            system=_SIGNAL_SYSTEM,
+            max_tokens=1200,
+            user_settings=user_settings,
+        )
+        if user_id:
+            token_tracker.log_usage(user_id, "signal_scan", model_name, in_tok, out_tok,
+                                    was_byok=_is_byok(user_settings))
+    except Exception as e:
+        return SignalScanResult(
+            signals=[],
+            market_summary="Signal scan unavailable.",
+            scan_basis=f"Based on {len(screener_picks)} screener picks",
+            fetched_at=now_iso,
+        )
+
+    # Parse JSON response
+    try:
+        # Strip accidental markdown fences
+        clean = raw_text.strip()
+        if clean.startswith("```"):
+            clean = "\n".join(clean.split("\n")[1:])
+        if clean.endswith("```"):
+            clean = "\n".join(clean.split("\n")[:-1])
+        data = json.loads(clean)
+    except (json.JSONDecodeError, ValueError):
+        # Fallback: return empty result rather than crashing
+        return SignalScanResult(
+            signals=[],
+            market_summary=raw_text[:200] if raw_text else "Parse error.",
+            scan_basis=f"Based on {len(screener_picks)} screener picks",
+            fetched_at=now_iso,
+        )
+
+    signals: list[StockSignal] = []
+    for item in data.get("signals", [])[:5]:
+        ticker = str(item.get("ticker", "")).upper().strip()
+        if not ticker:
+            continue
+        # Find matching screener pick to attach live data
+        pick = next((p for p in screener_picks if p.ticker == ticker), None)
+        signals.append(StockSignal(
+            ticker=ticker,
+            name=pick.name if pick else None,
+            signal_type=item.get("signal_type", "momentum_burst"),
+            lean=item.get("lean", "neutral"),
+            confidence=item.get("confidence", "medium"),
+            ai_rationale=_ensure_disclaimer(item.get("ai_rationale", "")),
+            momentum_1d=pick.momentum_1d if pick else None,
+            rsi_14=pick.rsi_14 if pick else None,
+            volume_ratio=pick.volume_ratio if pick else None,
+            current_price=pick.price if pick else None,
+            change_pct=pick.change_pct if pick else None,
+        ))
+
+    return SignalScanResult(
+        signals=signals,
+        market_summary=data.get("market_summary", ""),
+        scan_basis=f"Based on {len(news_text.splitlines())} news headlines + {len(screener_picks)} screener picks",
+        fetched_at=now_iso,
+    )

@@ -84,6 +84,44 @@ export interface AgentCouncilResult {
   fetched_at: string
 }
 
+export interface StockSignal {
+  ticker: string
+  name?: string
+  signal_type: 'momentum_burst' | 'news_catalyst' | 'oversold_bounce' | 'sector_rotation'
+  lean: 'bullish' | 'bearish' | 'neutral'
+  confidence: 'high' | 'medium' | 'low'
+  ai_rationale: string
+  momentum_1d?: number
+  rsi_14?: number
+  volume_ratio?: number
+  current_price?: number
+  change_pct?: number
+}
+
+export interface SignalScanResult {
+  signals: StockSignal[]
+  market_summary: string
+  scan_basis: string
+  fetched_at: string
+  disclaimer: string
+}
+
+export interface TaggedNewsItem {
+  title: string
+  url: string
+  publisher: string
+  published_at?: string
+  tickers: string[]
+  sentiment: 'bullish' | 'bearish' | 'neutral'
+  sentiment_score: number
+}
+
+export interface TaggedNewsBundle {
+  articles: TaggedNewsItem[]
+  fetched_at: string
+  overall_sentiment: 'bullish' | 'bearish' | 'neutral'
+}
+
 export interface UserSettings {
   user_id: string
   preferred_model: string

@@ -5,6 +5,7 @@ import { useAuthStore } from './store/auth'
 import Landing from './pages/Landing'
 import Dashboard from './pages/Dashboard'
 import Brief from './tabs/Brief'
+import Signals from './tabs/Signals'
 import Chat from './tabs/Chat'
 import Portfolio from './tabs/Portfolio'
 import Watchlist from './tabs/Watchlist'
@@ -54,6 +55,7 @@ export default function App() {
         }>
           <Route index element={<Navigate to="brief" replace />} />
           <Route path="brief" element={<Brief />} />
+          <Route path="signals" element={<Signals />} />
           <Route path="chat" element={<Chat />} />
           <Route path="portfolio" element={<Portfolio />} />
           <Route path="watchlist" element={<Watchlist />} />

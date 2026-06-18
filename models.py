@@ -300,6 +300,52 @@ class ScreenerResult(BaseModel):
 
 # ── Deep Analysis (aggregates all) ───────────────────────────────────────────
 
+# ── Signals / Forecast ───────────────────────────────────────────────────────
+
+class StockSignal(BaseModel):
+    ticker: str
+    name: Optional[str] = None
+    signal_type: str              # "momentum_burst" | "news_catalyst" | "oversold_bounce" | "sector_rotation"
+    lean: str                     # "bullish" | "bearish" | "neutral"
+    confidence: str               # "high" | "medium" | "low"  (never a %)
+    ai_rationale: str             # 2-sentence AI synthesis
+    momentum_1d: Optional[float] = None
+    rsi_14: Optional[float] = None
+    volume_ratio: Optional[float] = None
+    news_sentiment: Optional[str] = None
+    current_price: Optional[float] = None
+    change_pct: Optional[float] = None
+
+
+class SignalScanResult(BaseModel):
+    signals: list[StockSignal] = []
+    market_summary: str = ""
+    scan_basis: str = ""          # "Based on N news articles + screener of M stocks"
+    fetched_at: str
+    disclaimer: str = (
+        "Educational signal analysis only — not investment advice. "
+        "Past setups do not guarantee future performance."
+    )
+
+
+class TaggedNewsItem(BaseModel):
+    title: str
+    url: str
+    publisher: str
+    published_at: Optional[str] = None
+    tickers: list[str] = []
+    sentiment: str = "neutral"    # "bullish" | "bearish" | "neutral"
+    sentiment_score: int = 0      # positive word count minus negative word count
+
+
+class TaggedNewsBundle(BaseModel):
+    articles: list[TaggedNewsItem] = []
+    fetched_at: str
+    overall_sentiment: str = "neutral"
+
+
+# ── Deep Analysis (aggregates all) ───────────────────────────────────────────
+
 class DeepStockAnalysis(BaseModel):
     ticker: str
     name: Optional[str] = None

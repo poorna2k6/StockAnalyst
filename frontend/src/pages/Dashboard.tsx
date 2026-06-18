@@ -1,9 +1,10 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { TrendingUp, BarChart2, MessageSquare, Briefcase, Star, Settings2, LogOut } from 'lucide-react'
+import { TrendingUp, BarChart2, MessageSquare, Briefcase, Star, Settings2, LogOut, Radio } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 const NAV = [
   { icon: BarChart2,      label: 'Brief',     path: '/app/brief'     },
+  { icon: Radio,          label: 'Signals',   path: '/app/signals'   },
   { icon: MessageSquare,  label: 'Chat',      path: '/app/chat'      },
   { icon: Briefcase,      label: 'Portfolio', path: '/app/portfolio' },
   { icon: Star,           label: 'Watchlist', path: '/app/watchlist' },

@@ -2,6 +2,7 @@ import { supabase } from './supabase'
 import type {
   Quote, PortfolioSummary, NewsBundle,
   ScreenerResult, AgentCouncilResult, UserSettings, UsageSummary,
+  SignalScanResult, TaggedNewsBundle,
 } from './types'
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:8000'
@@ -82,6 +83,18 @@ export async function removeFromWatchlist(ticker: string): Promise<void> {
 export async function getMarketNews(): Promise<NewsBundle> {
   const res = await apiFetch('/news')
   if (!res.ok) throw new Error('Failed to fetch news')
+  return res.json()
+}
+
+export async function getTaggedNews(maxItems = 20): Promise<TaggedNewsBundle> {
+  const res = await apiFetch(`/news/tagged?max_items=${maxItems}`)
+  if (!res.ok) throw new Error('Failed to fetch tagged news')
+  return res.json()
+}
+
+export async function getSignals(): Promise<SignalScanResult> {
+  const res = await apiFetch('/signals')
+  if (!res.ok) throw new Error('Failed to fetch signals')
   return res.json()
 }
 
